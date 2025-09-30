@@ -1,6 +1,6 @@
 # Ignore Python compile directory
 __pycache__/
-
+music/
 # Ignore build directories and files
 build/
 dist/

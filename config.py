@@ -2,7 +2,7 @@ import yaml
 from logger import startLog
 from tkinter import *
 from tkinter import messagebox
-from os import startfile
+
 
 defaults = dict(
    config=dict(
@@ -37,16 +37,7 @@ def genConfig():
    # fill yml file with default configs
    yaml.dump(defaults["config"], file, default_flow_style=False)
 
-   # create prompt window asking if user wishes to view config file
-   # root window required to display messagebox, hidden and then destroyed immediately after the prompt
-   root = Tk()
-   root.overrideredirect(1)
-   root.withdraw()
-   confirm = messagebox.askyesnocancel("Config file created",
-   "First time run detected, config file with default settings set has been created. Do you wish to open it now?")
-   if (confirm):
-      startfile("config.yml")
-   root.destroy()
+
 
 def recursiveDictCheck(d, defaultD, location):
    for key in defaultD:
