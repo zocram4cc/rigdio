@@ -4,7 +4,11 @@ import uvicorn
 import os
 from rigparse import parse
 from audio_manager import audio_manager
+from gamestate import GameState
 import logging
+
+# Global GameState object
+gamestate = GameState()
 
 # Custom logging configuration
 LOGGING_CONFIG = {
@@ -63,13 +67,29 @@ async def load_teams(request: LoadRequest):
         logging.error(f"Away team file not found: {away_path}")
         raise HTTPException(status_code=404, detail=f"Away team file not found: {away_path}")
 
-    home_music, home_name, _ = parse(home_path, load=True, home=True)
-    away_music, away_name, _ = parse(away_path, load=True, home=False)
+    home_music, home_name, _ = parse(home_path, load=False, home=True)
+    away_music, away_name, _ = parse(away_path, load=False, home=False)
+
+    # Manually add generic goal horn to each player
+    if 'goal' in home_music:
+        for name, conditions in home_music.items():
+            if name not in ['anthem', 'victory', 'goal', 'name', 'chant', ';event']:
+                conditions.extend(home_music['goal'])
+    
+    if 'goal' in away_music:
+        for name, conditions in away_music.items():
+            if name not in ['anthem', 'victory', 'goal', 'name', 'chant', ';event']:
+                conditions.extend(away_music['goal'])
 
     audio_manager.home_team = home_name
     audio_manager.away_team = away_name
     audio_manager.home_music = home_music
     audio_manager.away_music = away_music
+    audio_manager.clear_goalhorn_positions()
+
+    gamestate.clear()
+    gamestate.home_name = home_name
+    gamestate.away_name = away_name
 
     logging.info(f"Loaded music for home team '{home_name}' and away team '{away_name}'")
     return {"message": f"Loaded music for home team '{home_name}' and away team '{away_name}'"}
@@ -102,7 +122,9 @@ class GoalRequest(BaseModel):
 @app.post("/api/goal")
 async def play_goal(request: GoalRequest):
     logging.info(f"Received /api/goal request for team {request.team} and scorer {request.scorer}")
-    audio_manager.play_goal_sound(request.team, request.scorer)
+    home_team = request.team == "home"
+    gamestate.score(request.scorer, home_team)
+    audio_manager.play_goal_sound(request.team, request.scorer, gamestate)
     return {"message": f"Playing goal sound for {request.scorer}"}
 
 if __name__ == "__main__":
