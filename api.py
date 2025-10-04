@@ -43,7 +43,7 @@ LOGGING_CONFIG = {
         },
     },
 }
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
 
 
