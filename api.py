@@ -43,18 +43,27 @@ LOGGING_CONFIG = {
         },
     },
 }
+logging.basicConfig(level=logging.DEBUG)
+
+
 
 app = FastAPI()
 
 class LoadRequest(BaseModel):
     home: str
     away: str
+    match_type: str | None = None
 
 @app.post("/api/load")
 async def load_teams(request: LoadRequest):
-    logging.info(f"Received /api/load request with home='{request.home}' and away='{request.away}'")
+    logging.info(f"Received /api/load request with home='{request.home}', away='{request.away}', and match_type='{request.match_type}'")
     home_team_id = request.home
     away_team_id = request.away
+
+    if request.match_type:
+        gamestate.gametype = request.match_type
+    else:
+        gamestate.gametype = None
 
     # Assuming music is in 'music/<team_id>/<team_id>.4ccm'
     home_path = os.path.join("music", home_team_id, f"{home_team_id}.4ccm")
@@ -97,7 +106,7 @@ async def load_teams(request: LoadRequest):
 @app.post("/api/anthems")
 async def play_anthems():
     logging.info("Received /api/anthems request")
-    audio_manager.play_anthems()
+    audio_manager.play_anthems(gamestate)
     return {"message": "Playing anthems"}
 
 class VictoryRequest(BaseModel):
