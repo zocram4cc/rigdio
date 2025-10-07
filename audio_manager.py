@@ -117,35 +117,66 @@ class AudioManager:
         events.event_detach(vlc.EventType.MediaPlayerEndReached)
         logging.debug(f"Finished waiting for {file_path}")
 
-    def _select_anthem(self, anthem_candidates, gametype):
+    def _select_anthem(self, anthem_candidates, gametype, opponent_name):
         """
-        Selects an anthem using the .data attribute, with the last list item
-        as the only possible default.
+        Selects the most specific valid anthem by first validating candidates
+        and then scoring the ones that pass.
         """
-        if not anthem_candidates:
-            return None
+        best_match = None
+        highest_score = -1
 
-        last_item = anthem_candidates[-1]
-        last_default = None
-        
-        if not getattr(last_item, 'data', None):
-            last_default = last_item
-
-        specific_match = None
-        if gametype:
-            target_string = f"match {gametype}"
-            for anthem in anthem_candidates:
-                if target_string in getattr(anthem, 'data', []):
-                    specific_match = anthem
-                    break 
-        final_anthem = specific_match or last_default
-
-        if final_anthem:
-            logging.info(f"Selected anthem for '{gametype}': {final_anthem.songname}")
-        else:
-            logging.warning(f"No suitable anthem found for '{gametype}'.")
+        for anthem in anthem_candidates:
+            is_valid = True
+            current_score = 0
             
-        return final_anthem
+            conditions = getattr(anthem, 'conditions', [])
+
+            # 1. VALIDATION: Disqualify the anthem if any condition explicitly conflicts.
+            for condition in conditions:
+                cond_type = getattr(condition, 'type', lambda: None)()
+
+                # A 'match' condition only disqualifies if a gametype exists AND it doesn't match.
+                if cond_type == 'match' and gametype and not condition.check_match_type(gametype):
+                    is_valid = False
+                    break
+
+                # An 'opponent' condition requires an opponent to be present and match.
+                if cond_type == 'opponent':
+                    required_opponents = [t.lower() for t in getattr(condition, 'tokens', lambda: [])()]
+                    if not opponent_name or opponent_name.lower() not in required_opponents:
+                        is_valid = False
+                        break
+            
+            if not is_valid:
+                continue # This anthem is disqualified, move to the next one.
+
+            # 2. SCORING: If the anthem is valid, score it based on what it matches.
+            for condition in conditions:
+                cond_type = getattr(condition, 'type', lambda: None)()
+                
+                # Check for an opponent match
+                if cond_type == 'opponent':
+                    required_opponents = [t.lower() for t in getattr(condition, 'tokens', lambda: [])()]
+                    if opponent_name and opponent_name.lower() in required_opponents:
+                        current_score += 2 # Opponent match is high priority
+
+                # Check for a gametype match
+                if cond_type == 'match':
+                    if gametype and condition.check_match_type(gametype):
+                        current_score += 1 # Gametype match is lower priority
+
+            # 3. SELECTION: If this is the best valid anthem so far, choose it.
+            if current_score >= highest_score:
+                highest_score = current_score
+                best_match = anthem
+        
+        if best_match:
+            logging.info(f"Selected anthem: {best_match.songname} (Score: {highest_score}) for opponent '{opponent_name}' and gametype '{gametype}'")
+        else:
+            # This warning should now only appear if there's truly no default
+            logging.warning(f"No suitable anthem found for opponent '{opponent_name}' and gametype '{gametype}'.")
+            
+        return best_match
 
     def _start_playback_thread(self, target_func, args_tuple=()):
         """Helper to safely stop any existing thread before starting a new one."""
@@ -156,8 +187,8 @@ class AudioManager:
     def play_anthems(self, gamestate):
         home_anthem_candidates = self.home_music.get("anthem", [])
         away_anthem_candidates = self.away_music.get("anthem", [])
-        home_anthem = self._select_anthem(home_anthem_candidates, gamestate.gametype)
-        away_anthem = self._select_anthem(away_anthem_candidates, gamestate.gametype)
+        home_anthem = self._select_anthem(home_anthem_candidates, gamestate.gametype, self.away_team)
+        away_anthem = self._select_anthem(away_anthem_candidates, gamestate.gametype, self.home_team)
         if home_anthem is None or away_anthem is None:
             logging.warning("Could not select one or both anthems, skipping playback.")
             return
