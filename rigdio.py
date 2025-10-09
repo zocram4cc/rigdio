@@ -15,6 +15,7 @@ from version import rigdio_version as version
 from rigdj_util import setMaxWidth
 from event import EventController
 import chantswindow as cWin
+from webserver import start_webserver
 
 from logger import startLog
 if __name__ == '__main__':
@@ -72,6 +73,8 @@ class Rigdio (Frame):
       self.nuke = False
       # events
       self.events = EventController()
+      if settings.config["webserver_enabled"]:
+         start_webserver(self, settings.config["webserver_port"])
       # undo (temporary)
       Button(self, text="Undo Last Goal", command=self.game.undoLast).grid(row=3, column=1)
 

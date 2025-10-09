@@ -2,7 +2,7 @@ import yaml
 from logger import startLog
 from tkinter import *
 from tkinter import messagebox
-
+import os
 
 defaults = dict(
    config=dict(
@@ -10,7 +10,9 @@ defaults = dict(
       alphabetical_sort_chants=0, # sort team chants alphabetically
       chant_timer_enabled_default=1, # enable chant timer by default
       show_goalhorn_volume_default=0, # show goalhorn volume sliders by default
-      write_to_log=1 # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
+      write_to_log=1, # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
+      webserver_enabled=1,
+      webserver_port=31338
    ),
    fade=dict(
       anthem=True,
@@ -28,6 +30,14 @@ defaults = dict(
    match="Group"
 )
 
+import platform
+
+def open_file(filename):
+    if platform.system() == 'Windows':
+        os.startfile(filename)
+    else:
+        os.system(f'xdg-open {filename}')
+
 def genConfig():
    # create config.yml file, return early if it already exists
    try:
@@ -37,7 +47,16 @@ def genConfig():
    # fill yml file with default configs
    yaml.dump(defaults["config"], file, default_flow_style=False)
 
-
+   # create prompt window asking if user wishes to view config file
+   # root window required to display messagebox, hidden and then destroyed immediately after the prompt
+   root = Tk()
+   root.overrideredirect(1)
+   root.withdraw()
+   confirm = messagebox.askyesnocancel("Config file created",
+   "First time run detected, config file with default settings set has been created. Do you wish to open it now?")
+   if (confirm):
+      open_file("config.yml")
+   root.destroy()
 
 def recursiveDictCheck(d, defaultD, location):
    for key in defaultD:
@@ -98,7 +117,9 @@ class ConfigValues:
                       'alphabetical_sort_chants:int',
                       'chant_timer_enabled_default:int',
                       'show_goalhorn_volume_default:int',
-                      'write_to_log:int'
+                      'write_to_log:int',
+                      'webserver_enabled:int',
+                      'webserver_port:int'
                     ]
       for item in mustBeValid:
          items = item.split(':')
