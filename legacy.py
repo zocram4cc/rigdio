@@ -2,6 +2,11 @@ from condition import *
 from os.path import splitext
 from glob import glob
 import random
+from rigdio_except import SongNotFound
+import sys
+import os
+from os.path import abspath, isfile, basename, isdir, join, split
+from urllib.parse import quote
 
 class ConditionList:
    def __init__(self, pname = "NOPLAYER", tname = "NOTEAM", data = [], songname = "New Song", home = True, runInstructions = True):
@@ -160,13 +165,22 @@ class ConditionPlayer (ConditionList):
          self.songname = normalized[0]
          fullpath = normalized[0]
 
+      # if song cannot be found, check for case-insensitive match on non-windows
+      if not isfile(fullpath) and sys.platform != "win32":
+         directory, file_name = split(fullpath)
+         if isdir(directory):
+            for f in os.listdir(directory):
+               if f.lower() == file_name.lower():
+                  fullpath = join(directory, f)
+                  break
+
       # if song cannot be found, set return the error message instead of the MediaPlayer
       # reason for doing this is to have rigdio check for all missing files
       # and list them all out instead of just one at a time
       if not isfile(fullpath):
          return basename(fullpath) + " not found."
       # no-video to prevent any video tracks from playing
-      return vlc.MediaPlayer("file:///"+fullpath, ":no-video")
+      return vlc.MediaPlayer("file:///"+quote(fullpath), ":no-video")
 
    def reloadSong (self):
       self.firstPlay = True
