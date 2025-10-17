@@ -25,7 +25,7 @@ def _notify_bot_to_mute(duration_seconds):
 def start_webserver(rigdio_instance, port):
     app = Flask(__name__)
     playback_lock = threading.Lock()
-    chant_interrupt_event = threading.Event()
+    playback_interrupt_event = threading.Event()
 
     def play_sound_with_duration(button, duration):
         if duration:
@@ -33,13 +33,14 @@ def start_webserver(rigdio_instance, port):
         if isinstance(button, PlayerButtons):
             button.playSong()
             if duration:
-                time.sleep(duration)
+                playback_interrupt_event.wait(timeout=duration)
+                playback_interrupt_event.clear()
                 button.clists.pauseSong()
         elif isinstance(button, ChantsButton):
             button.playButton.invoke()
             if duration:
-                chant_interrupt_event.wait(timeout=duration)
-                chant_interrupt_event.clear()
+                playback_interrupt_event.wait(timeout=duration)
+                playback_interrupt_event.clear()
                 button.chantsManager.endThread()
 
     def play_anthem_sequence(duration=50):
@@ -50,13 +51,19 @@ def start_webserver(rigdio_instance, port):
         # Play away anthem
         _notify_bot_to_mute(duration)
         rigdio_instance.away.anthemButton.playSong()
-        time.sleep(duration)
+        if playback_interrupt_event.wait(timeout=duration):
+            rigdio_instance.away.anthemButton.clists.pauseSong()
+            playback_interrupt_event.clear()
+            return # interrupted
         rigdio_instance.away.anthemButton.clists.pauseSong()
 
         # Play home anthem
         _notify_bot_to_mute(duration)
         rigdio_instance.home.anthemButton.playSong()
-        time.sleep(duration)
+        if playback_interrupt_event.wait(timeout=duration):
+            rigdio_instance.home.anthemButton.clists.pauseSong()
+            playback_interrupt_event.clear()
+            return # interrupted
         rigdio_instance.home.anthemButton.clists.pauseSong()
 
     @app.route('/api/load', methods=['POST'])
@@ -119,7 +126,7 @@ def start_webserver(rigdio_instance, port):
             return jsonify({"error": f"Team '{team}' not loaded."}), 404
 
         if playback_lock.locked():
-            chant_interrupt_event.set()
+            playback_interrupt_event.set()
 
         lock_acquired = playback_lock.acquire(timeout=2)
 
