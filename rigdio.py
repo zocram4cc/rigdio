@@ -15,6 +15,7 @@ from version import rigdio_version as version
 from rigdj_util import setMaxWidth
 from event import EventController
 import chantswindow as cWin
+import betting
 
 from logger import startLog
 if __name__ == '__main__':
@@ -56,6 +57,10 @@ class Rigdio (Frame):
       self.game = GameState(instance=self)
       self.home = None
       self.away = None
+      self.betting_start_sent = False
+      self.betting_close_sent = False
+      self.home_team_updated = False
+      self.away_team_updated = False
       # file menu
       Button(self, text="Load Home Team", command=self.loadFile, bg=settings.colours["home"]).grid(row=0, column=0)
       Button(self, text="Load Away Team", command=lambda: self.loadFile(False), bg=settings.colours["away"]).grid(row=0, column=2)
@@ -74,6 +79,7 @@ class Rigdio (Frame):
       self.events = EventController()
       # undo (temporary)
       Button(self, text="Undo Last Goal", command=self.game.undoLast).grid(row=3, column=1)
+      Button(self, text="Draw", command=betting.declare_draw).grid(row=4, column=1)
 
    def initGameTypeMenu (self):
       gameTypeMenu = Frame(self)
@@ -182,6 +188,13 @@ class Rigdio (Frame):
       self.chantsManager.endThread()
       master.destroy()
 
+   def check_and_start_betting(self):
+      if self.home_team_updated and self.away_team_updated and self.home and self.away:
+         betting.start_betting(self.game.home_name, self.game.away_name)
+         self.home_team_updated = False
+         self.away_team_updated = False
+         self.betting_start_sent = True
+
    def legacyLoad (self, f, home):
       print("Loading music instructions from {}.".format(f))
       try:
@@ -234,6 +247,7 @@ class Rigdio (Frame):
          if self.events is not None:
             self.events.setHome(parsed=events)
             print("Prepared events for team /{}/.".format(tname))
+         self.home_team_updated = True
       else:
          self.game.away_name = tname
          if self.away is not None:
@@ -255,6 +269,11 @@ class Rigdio (Frame):
          if self.events is not None:
             self.events.setAway(parsed=events)
             print("Prepared events for team /{}/.".format(tname))
+         self.away_team_updated = True
+
+      self.betting_start_sent = False
+      self.betting_close_sent = False
+      self.check_and_start_betting()
 
    def loadFile (self, home = True):
       f = filedialog.askopenfilename(filetypes = (("Rigdio export files", "*.4ccm"),("All files","*.*")))

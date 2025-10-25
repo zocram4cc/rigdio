@@ -6,6 +6,7 @@ from rigdio_except import UnloadSong, SongNotFound
 from legacy import PlayerManager
 from config import settings
 from time import sleep
+import betting
 
 class PlayerButtons:
    def __init__ (self, frame, clists, home, game, text = None):
@@ -90,6 +91,12 @@ class PlayerButtons:
             return
          # set the button as sunken
          self.playButton.configure(relief=SUNKEN)
+         if self.anthem and not self.frame.master.betting_close_sent:
+            betting.close_betting()
+            self.frame.master.betting_close_sent = True
+         if self.victoryAnthem:
+            betting.declare_winner(self.game.home_name if self.clists.home else self.game.away_name)
+
       else:
          # enable the playback slider and pause the song
          self.frame.master.disablePlaybackSpeedSlider(False)

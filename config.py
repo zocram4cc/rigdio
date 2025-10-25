@@ -2,7 +2,14 @@ import yaml
 from logger import startLog
 from tkinter import *
 from tkinter import messagebox
-from os import startfile
+import os
+import platform
+
+def open_file(filename):
+    if platform.system() == 'Windows':
+        os.startfile(filename)
+    else:
+        os.system(f'xdg-open {filename}')
 
 defaults = dict(
    config=dict(
@@ -10,7 +17,12 @@ defaults = dict(
       alphabetical_sort_chants=0, # sort team chants alphabetically
       chant_timer_enabled_default=1, # enable chant timer by default
       show_goalhorn_volume_default=0, # show goalhorn volume sliders by default
-      write_to_log=1 # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
+      write_to_log=1, # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
+      betting=dict(
+         endpoint="http://localhost:3000/betapi",
+         user="admin",
+         password="password"
+      )
    ),
    fade=dict(
       anthem=True,
@@ -45,7 +57,7 @@ def genConfig():
    confirm = messagebox.askyesnocancel("Config file created",
    "First time run detected, config file with default settings set has been created. Do you wish to open it now?")
    if (confirm):
-      startfile("config.yml")
+      open_file("config.yml")
    root.destroy()
 
 def recursiveDictCheck(d, defaultD, location):

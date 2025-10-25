@@ -1,4 +1,6 @@
-from os.path import basename, splitext
+from os.path import basename, splitext, isfile
+import os
+import sys
 from legacy import ConditionList, ConditionPlayer
 
 # reserved names
@@ -52,6 +54,11 @@ def parse (filename, load = True, home = True):
          print("No file name specified for {}, looking for {}.".format(player, default))
          data.append(default)
       filename = folder+data[1] # location of song, relative to location of export file
+      if not isfile(filename) and sys.platform != "win32":
+         for file in os.listdir(folder):
+            if file.lower() == data[1].lower():
+               filename = folder+file
+               break
       # if we're loading the songs, create ConditionPlayer objects
       if load:
          songtype = ("goalhorn" if (player != "anthem" and player != "victory") else player)
