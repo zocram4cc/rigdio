@@ -4,6 +4,7 @@ chant_timer_enabled_default: 1
 show_goalhorn_volume_default: 0
 write_to_log: 1
 betting:
+  enabled: False
   endpoint: https://rigbot.niuchan.org/api
   user: betrigdio
   password: Rigger123.

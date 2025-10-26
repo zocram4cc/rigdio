@@ -19,6 +19,7 @@ defaults = dict(
       show_goalhorn_volume_default=0, # show goalhorn volume sliders by default
       write_to_log=1, # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
       betting=dict(
+         enabled=False,
          endpoint="http://localhost:3000/betapi",
          user="admin",
          password="password"

@@ -57,6 +57,7 @@ class Rigdio (Frame):
       self.game = GameState(instance=self)
       self.home = None
       self.away = None
+      self.betting_enabled = settings.config["betting"].get("enabled")
       self.betting_start_sent = False
       self.betting_close_sent = False
       self.home_team_updated = False
@@ -80,6 +81,10 @@ class Rigdio (Frame):
       # undo (temporary)
       Button(self, text="Undo Last Goal", command=self.game.undoLast).grid(row=3, column=1)
       Button(self, text="Draw", command=betting.declare_draw).grid(row=4, column=1)
+      Checkbutton(self, text="Betting API", command=self.toggle_betting_api, variable=self.betting_enabled).grid(row=5, column=1)
+
+   def toggle_betting_api(self):
+      self.betting_enabled = not self.betting_enabled
 
    def initGameTypeMenu (self):
       gameTypeMenu = Frame(self)
@@ -190,7 +195,8 @@ class Rigdio (Frame):
 
    def check_and_start_betting(self):
       if self.home_team_updated and self.away_team_updated and self.home and self.away:
-         betting.start_betting(self.game.home_name, self.game.away_name)
+         if self.betting_enabled:
+            betting.start_betting(self.game.home_name, self.game.away_name)
          self.home_team_updated = False
          self.away_team_updated = False
          self.betting_start_sent = True
