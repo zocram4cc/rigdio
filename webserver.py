@@ -49,7 +49,8 @@ def start_webserver(rigdio_instance, port):
             return
 
         # Play away anthem
-        _notify_bot_to_mute(duration)
+        duration_both_anthems=duration*2
+        _notify_bot_to_mute(duration_both_anthems)
         rigdio_instance.away.anthemButton.playSong()
         if playback_interrupt_event.wait(timeout=duration):
             rigdio_instance.away.anthemButton.clists.pauseSong()
@@ -58,7 +59,7 @@ def start_webserver(rigdio_instance, port):
         rigdio_instance.away.anthemButton.clists.pauseSong()
 
         # Play home anthem
-        _notify_bot_to_mute(duration)
+        #_notify_bot_to_mute(duration)
         rigdio_instance.home.anthemButton.playSong()
         if playback_interrupt_event.wait(timeout=duration):
             rigdio_instance.home.anthemButton.clists.pauseSong()
