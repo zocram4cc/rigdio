@@ -25,7 +25,7 @@ def _notify_bot_to_mute(duration_seconds):
     except requests.exceptions.RequestException as e:
         logging.warning(f"Could not connect to the bot API to request mute. Is it running? Error: {e}")
 
-def start_webserver(rigdio_instance, port):
+def start_webserver(rigdio_instance, port, host):
     app = Flask(__name__)
     playback_lock = threading.Lock()
     playback_interrupt_event = threading.Event()
@@ -243,7 +243,7 @@ def start_webserver(rigdio_instance, port):
         return jsonify({"status": "success", "message": "Anthem sequence started."})
 
     def run_app():
-        app.run(port=port)
+        app.run(host=host, port=port)
 
     thread = threading.Thread(target=run_app)
     thread.daemon = True

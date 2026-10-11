@@ -16,8 +16,9 @@ defaults = dict(
       normalize_volume=1, # normalize all music to a consistent loudness level (uses target from level config); replaces individual volume sliders with a single master volume slider
       write_song_title_log=0, # write a title.log file that contains the current song's title/filename before clearing it, values above 0 set the timer in seconds, -1 keeps it for the whole song
       write_to_log=1, # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
-      webserver_enabled=1,
-      webserver_port=31338
+      webserver_enabled=1, # local API for rigbot / SEN:P-AI
+      webserver_port=31338,
+      webserver_host="127.0.0.1" # 0.0.0.0 exposes the API (no auth) to the network
    ),
    fade=dict(
       anthem=True,

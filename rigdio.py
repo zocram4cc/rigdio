@@ -112,7 +112,7 @@ class Rigdio (Frame):
       # events
       self.events = EventController()
       if settings.config["webserver_enabled"]:
-         start_webserver(self, settings.config["webserver_port"])
+         start_webserver(self, settings.config["webserver_port"], settings.config["webserver_host"])
       # blank space
       Label(self, text=None).grid(row=3, column=1)
       # undo (temporary)

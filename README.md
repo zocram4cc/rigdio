@@ -5,6 +5,21 @@ Rigdio (with RigDJ)
 
 If you're just looking for the program, you can find it [here](https://github.com/the4chancup/rigdio/releases). Information on how to use Rigdio/RigDJ themselves can also be found [here](https://implyingrigged.info/wiki/Rigdio).
 
+## Local API (this fork)
+
+With `webserver_enabled: 1`, Rigdio serves a JSON API on `webserver_host:webserver_port` (default `127.0.0.1:31338`, this machine only; `0.0.0.0` exposes it to the network without authentication). rigbot and SEN:P-AI use it.
+
+| Endpoint | Body | Plays |
+|---|---|---|
+| `POST /api/load` | `{home, away}` | loads `music/<name>/<name>.4ccm` for both sides; same teams again is a no-op, a missing export is a 404 |
+| `POST /api/anthems` | `{duration}` | away anthem, then home anthem |
+| `POST /api/goal` | `{side` or `team, scorer, duration}` | the scorer's goalhorn (fuzzy name match), else the standard one |
+| `POST /api/victory` | `{side` or `team, duration}` | the victory anthem |
+| `POST /api/chant` | `{side` or `team, duration}`, all optional | a random chant; random side when none is given |
+| `POST /api/event` | `{event, player, minute}` | the player's `event sub/red/yellow/owngoal` clip |
+
+`side` is `home` or `away`; `team` is a loaded team's name. Durations are seconds. A busy player answers 409.
+
 ## Build Guide
 If you're interested in building Rigdio/RigDJ yourself, here's some info that'll help.
 
