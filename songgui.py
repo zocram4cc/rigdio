@@ -5,6 +5,7 @@ from rigparse import reserved
 from rigdio_except import UnloadSong, SongNotFound
 from legacy import PlayerManager
 from config import settings
+from rigdio_util import volumeColor
 from time import sleep
 
 class PlayerButtons:
@@ -24,7 +25,7 @@ class PlayerButtons:
       self.victoryAnthem = (self.pname == "victory")
       # timer stuff
       if self.victoryAnthem:
-         # vlc takes some time to retrieve song duration, so a sleep delay is needed
+         # mpv takes some time to retrieve song duration, so a sleep delay is needed
          self.timer = Timer(self, self.frame, 1)
       # check if text is none (most players)
       if self.text is None:
@@ -36,11 +37,18 @@ class PlayerButtons:
       self.awayButtonHook = None
       self.showVolume = True
       # text was specified, so this is a button for a reserved keyword
-      self.volumeButton = Button(self.frame, text="🔊", command=self.showHideVolume, bg=settings.colours["home" if home else "away"])
-      self.playButton = Button(self.frame, text=self.text, command=self.playSong, bg=settings.colours["home" if home else "away"])
-      self.resetButton = Button(self.frame, text="⟲", command=self.resetSong, bg=settings.colours["home" if home else "away"])
-      self.volume = Scale(self.frame, from_=0, to=100, orient=HORIZONTAL, command=self.clists.adjustVolume, showvalue=0)
-      self.volume.set(80)
+      self.colours = settings.darkColours if settings.config["dark_mode_enabled"] else settings.lightColours
+      self.normalize = settings.config["normalize_volume"]
+      if self.normalize:
+         self.volumeButton = None
+         self.volume = None
+      else:
+         self.volumeButton = Button(self.frame, text="🔊", command=self.showHideVolume, bg=self.colours["home" if home else "away"])
+         self.volume = Scale(self.frame, from_=0, to=200, orient=HORIZONTAL, command=self._volumeCommand, showvalue=0, troughcolor='#c8c8c8', bd=0, highlightthickness=0)
+         self.volume.set(100)
+         self.volume.configure(bg=volumeColor(100), activebackground=volumeColor(100))
+      self.playButton = Button(self.frame, text=self.text, command=self.playSong, bg=self.colours["home" if home else "away"])
+      self.resetButton = Button(self.frame, text="⟲", command=self.resetSong, bg=self.colours["home" if home else "away"])
 
       self.dropdownButton = None
       if self.victoryAnthem:
@@ -54,10 +62,21 @@ class PlayerButtons:
          self.volume.grid()
          self.showVolume = True
 
+   def _volumeCommand (self, value):
+      self.clists.adjustVolume(value)
+      color = volumeColor(int(value))
+      self.volume.configure(bg=color, activebackground=color)
+
    def resetSong (self):
       self.clists.resetLastPlayed()
       self.playButton.configure(relief=RAISED)
       # reset the VA timer
+      if self.victoryAnthem:
+         self.timer.resetTimer()
+
+   def reset (self):
+      self.clists.reset()
+      self.playButton.configure(relief=RAISED)
       if self.victoryAnthem:
          self.timer.resetTimer()
 
@@ -74,6 +93,9 @@ class PlayerButtons:
          # score points if it's a goalhorn
          if self.pname not in reserved or self.pname == "goal":
             self.game.score(self.pname, self.clists.home)
+            # snapshot pre-play state so Undo can restore it
+            self.game.lastSnapshot = self.clists.snapshot()
+            self.game.lastPlayerManager = self.clists
          # pass it up to the list manager
          try:
             # if this is the first time this song is being played and it has a custom playback speed set, set the slider to that speed
@@ -81,7 +103,7 @@ class PlayerButtons:
             # after the first time, if the playback speed slider has been moved, it will use the value of the slider instead
             self.clists.playSong(self.song)
             if not self.clists.song.customSpeed:
-               self.clists.song.song.set_rate(self.frame.master.playbackSpeedMenu.get())
+               self.clists.song.song.speed = self.frame.master.playbackSpeedMenu.get()
             self.frame.master.disablePlaybackSpeedSlider(True)
          # no song found
          except SongNotFound as e:
@@ -115,14 +137,16 @@ class PlayerButtons:
       messagebox.showinfo(title, text)
 
    def insert (self, row):
-      self.volumeButton.grid(row=row,column=0,sticky=N+S,padx=2,pady=(5,0))
+      if self.volumeButton is not None:
+         self.volumeButton.grid(row=row,column=0,sticky=N+S,padx=2,pady=(5,0))
       if self.dropdownButton is not None:
          self.playButton.grid(row=row,column=1,sticky=NE+SW,padx=(2,0),pady=(5,0))
          self.dropdownButton.grid(row=row,column=2,sticky=NS+W,pady=(5,0))
       else:
          self.playButton.grid(row=row,column=1,columnspan=2,sticky=NE+SW,padx=2,pady=(5,0))
       self.resetButton.grid(row=row,column=3,sticky=N+S,padx=2,pady=(5,0))
-      self.volume.grid(row=row+1,column=0,columnspan=4,sticky=E+W,pady=(0,5))
+      if self.volume is not None:
+         self.volume.grid(row=row+1,column=0,columnspan=4,sticky=E+W,pady=(0,5))
 
    # change what song the VA button will play (default/special)
    def changeVA (self, *args):
@@ -150,7 +174,7 @@ class PlayerButtons:
                break
       if not specialVAs:
          return specialVAs
-      self.dropdownButton = Menubutton(self.frame, text="▼", relief=RAISED, bg=settings.colours["home" if home else "away"])
+      self.dropdownButton = Menubutton(self.frame, text="▼", relief=RAISED, bg=self.colours["home" if home else "away"])
       menu = Menu(self.dropdownButton, tearoff=False)
       self.dropdownButton.configure(menu=menu)
       self.selected = StringVar()
@@ -159,7 +183,7 @@ class PlayerButtons:
          menu.add_radiobutton(label=specialVALabels[i], variable=self.selected, value=specialVALabels[i])
       self.selected.trace('w', self.changeVA)
       return specialVAs
-   
+
    # return the specified song from the list of special VAs
    def getSpecial (self):
       for anthem in self.specialVAs:
@@ -182,10 +206,10 @@ class Timer:
       self.songDuration = int()
       self.stopCounting = False
 
-   # have a sleep delay to retrieve song duration before starting up the timer (necessary due to python-vlc being shit)
+   # have a sleep delay to retrieve song duration before starting up the timer
    def retrieveSongInfo (self):
       sleep(self.delay)
-      self.songDuration = int(self.songui.clists.song.song.get_length()/1000)
+      self.songDuration = int(self.songui.clists.song.song.duration)
       self.timerStart()
 
    def timerStart (self):
@@ -214,7 +238,7 @@ class Timer:
       self.frame.updateSongTimer(0, 0)
 
 class TeamMenuLegacy (Frame):
-   def __init__ (self, master, tname, players, home, game):
+   def __init__ (self, master, tname, players, home, game, normalize=True):
       Frame.__init__(self, master)
       # store information from constructor
       self.master = master
@@ -222,6 +246,8 @@ class TeamMenuLegacy (Frame):
       self.players = players
       self.home = home
       self.game = game
+      # per-team normalization opt-out (only meaningful when global normalize_volume is on)
+      self.normalize = normalize
       # list of player buttons
       self.buttons = []
       # list of player names for use in buttons
@@ -229,34 +255,113 @@ class TeamMenuLegacy (Frame):
       # sort the player goalhorns alphabetically depending on user's configs
       if settings.config["alphabetical_sort_goalhorns"]:
          self.playerNames.sort()
+      # check if any tracks are marked louder and normalization is enabled
+      self.hasLouder = False
+      self.boostValue = 5
+      self.blinkId = None
+      self.blinkBold = False
+      if settings.config["normalize_volume"]:
+         for playerList in self.players.values():
+            for clist in playerList:
+               if hasattr(clist, 'louder') and clist.louder:
+                  self.hasLouder = True
+                  break
+            if self.hasLouder:
+               break
+      # row offset: if boost slider is shown, everything shifts down by 3
+      # (label row, dB value row, slider row)
+      rowOffset = 3 if self.hasLouder else 0
+      # volume boost slider (if applicable)
+      if self.hasLouder:
+         self.buildBoostSlider()
       # tkinter frame containing menu
       # victory song timer at the end
-      self.buildSongTimer()
+      self.buildSongTimer(rowOffset)
       # button for anthem
-      self.buildAnthemButton()
+      self.buildAnthemButton(rowOffset)
       # buttons for victory anthems
-      startRow = self.buildVictoryAnthemMenu() + 2
+      startRow = self.buildVictoryAnthemMenu(rowOffset) + 2
       # buttons for goalhorns
       self.buildGoalhornMenu(startRow)
       # show/hide the volume sliders for goalhorns depending on user's configs
-      if not settings.config["show_goalhorn_volume_default"]:
+      # (skipped when normalize_volume is enabled — no individual sliders exist)
+      if not settings.config["normalize_volume"] and not settings.config["show_goalhorn_volume_default"]:
          for button in self.buttons:
             button.volume.grid_remove()
             button.showVolume = False
+      # apply initial boost value to all louder-marked ConditionPlayers
+      if self.hasLouder:
+         self.applyBoost(self.boostValue)
 
-   def buildAnthemButton (self):
+   def buildBoostSlider (self):
+      self.boostLabel = Label(self, text="Volume Boost")
+      self.boostLabel.grid(row=0, columnspan=4, padx=2)
+      self.boostDbLabel = Label(self, text="{:+d} dB".format(self.boostValue))
+      self.boostDbLabel.grid(row=1, columnspan=4, padx=2)
+      self.boostScale = Scale(self, from_=-5, to=15, orient=HORIZONTAL, command=self._boostCommand, showvalue=0, troughcolor='#c8c8c8', bd=0, highlightthickness=0)
+      self.boostScale.set(self.boostValue)
+      self.boostScale.grid(row=2, columnspan=4, sticky=E+W, padx=2)
+
+   def _boostCommand (self, value):
+      self.boostValue = int(value)
+      self.boostDbLabel.configure(text="{:+d} dB".format(self.boostValue))
+      self.applyBoost(self.boostValue)
+      # also apply boost to chants via chantsManager
+      if hasattr(self.master, 'chantsManager') and self.master.chantsManager is not None:
+         self.master.chantsManager.applyBoost(self.boostValue, self.home)
+      # if a boosted song is currently playing, update its af filter live
+      for button in self.buttons:
+         if button.clists.song is not None and button.clists.song.louder:
+            if button.clists.song.normalize_gain is not None:
+               total_gain = button.clists.song.normalize_gain + self.boostValue
+               button.clists.song.song.af = "volume={:.1f}dB,alimiter=limit=0.95".format(total_gain)
+      # also update a currently playing louder-marked chant
+      if hasattr(self.master, 'chantsManager') and self.master.chantsManager is not None:
+         chant = self.master.chantsManager.activeChant
+         if chant is not None and hasattr(chant, 'louder') and chant.louder and chant.normalize_gain is not None:
+            total_gain = chant.normalize_gain + self.boostValue
+            chant.song.af = "volume={:.1f}dB,alimiter=limit=0.95".format(total_gain)
+
+   def applyBoost (self, boostDb):
+      for playerList in self.players.values():
+         for clist in playerList:
+            if hasattr(clist, 'louder') and clist.louder:
+               clist.boostValue = boostDb
+
+   def startBlinking (self):
+      if self.blinkId is not None:
+         return
+      self.blinkBold = False
+      self._blink()
+
+   def stopBlinking (self):
+      if self.blinkId is not None:
+         self.after_cancel(self.blinkId)
+         self.blinkId = None
+      self.blinkBold = False
+      self.boostLabel.configure(font="TkDefaultFont")
+
+   def _blink (self):
+      self.blinkBold = not self.blinkBold
+      if self.blinkBold:
+         self.boostLabel.configure(font="TkDefaultFont 9 bold")
+      else:
+         self.boostLabel.configure(font="TkDefaultFont")
+      self.blinkId = self.after(1000, self._blink)
+
+   def buildAnthemButton (self, rowOffset=0):
       self.anthemButton = PlayerButtons(self, self.players["anthem"], self.home, self.game, "Anthem")
       self.buttons.append(self.anthemButton)
-      self.anthemButton.insert(2)
+      self.anthemButton.insert(2 + rowOffset)
 
-   def buildVictoryAnthemMenu (self):
+   def buildVictoryAnthemMenu (self, rowOffset=0):
       if "victory" in self.players:
          self.victoryButton = PlayerButtons(self, self.players["victory"], self.home, self.game, "Victory Anthem")
          self.buttons.append(self.victoryButton)
-         self.victoryButton.insert(4)
-         return 4
+         self.victoryButton.insert(4 + rowOffset)
+         return 4 + rowOffset
       else:
-         return 0
+         return rowOffset
 
    def buildGoalhornMenu (self, startRow):
       Label(self, text="Goalhorns").grid(row=startRow,columnspan=4)
@@ -268,11 +373,11 @@ class TeamMenuLegacy (Frame):
          self.playerButton = PlayerButtons(self, self.players[name], self.home, self.game)
          self.buttons.append(self.playerButton)
          self.playerButton.insert(startRow+3+2*i)
-   
-   def buildSongTimer (self):
+
+   def buildSongTimer (self, rowOffset=0):
       self.timeText = Label(self)
       self.updateSongTimer(0, 0)
-      self.timeText.grid(columnspan=4)
+      self.timeText.grid(row=rowOffset, columnspan=4)
 
    # updates the UI timer
    def updateSongTimer (self, timer, duration):
@@ -286,6 +391,30 @@ class TeamMenuLegacy (Frame):
       for player in self.players.keys():
          for clist in self.players[player]:
             clist.disable()
+
+   def reset (self):
+      for button in self.buttons:
+         button.reset()
+
+   # set the per-team normalize flag and propagate it to every loaded ConditionPlayer
+   def setNormalize (self, value):
+      self.normalize = value
+      for playerList in self.players.values():
+         for clist in playerList:
+            if hasattr(clist, 'normalize'):
+               clist.normalize = value
+
+   # return the file paths of every song loaded for this team (for background analysis)
+   # chants is an optional list of chant ConditionPlayers to include
+   def allSongPaths (self, chants=None):
+      paths = []
+      for playerList in self.players.values():
+         for clist in playerList:
+            if hasattr(clist, 'songname'):
+               paths.append(clist.songname)
+      if chants:
+         paths.extend(c.songname for c in chants if hasattr(c, 'songname'))
+      return paths
 
    def goNuclear(self):
       for playerButton in self.buttons:

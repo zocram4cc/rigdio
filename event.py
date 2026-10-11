@@ -14,7 +14,7 @@ class EventManager ():
 
    def __init__ (self, parsed = None, *args, **kwargs):
       super().__init__(*args, **kwargs)
-      
+
       self.clips = {x:{} for x in EventManager.types}
       self.setClips(parsed)
       self.last = {event: -1 for event in EventManager.types}
@@ -78,6 +78,10 @@ class EventController:
    def setAway (self, parsed):
       self.away.setClips(parsed)
       print("Away team event clips ready.")
+
+   def reset (self, home):
+      manager = self.home if home else self.away
+      manager.last = {event: -1 for event in EventManager.types}
 
    def start (self, SENPAI):
       if not self.registered:

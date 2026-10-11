@@ -1,7 +1,6 @@
 import threading
 from time import sleep
 from os.path import basename, abspath, isfile
-import vlc
 
 # needed for prompts
 from tkinter import *
@@ -27,7 +26,7 @@ class Condition:
    def check(self, gamestate):
       """
          Checks if a condition is true or not.
-         
+
          Arguments:
           - gamestate (GameState): state of the game.
       """
@@ -98,7 +97,7 @@ class GoalCondition (ArithCondition):
       if tokens[0] not in binaryOperators:
          raise ValueError("invalid GoalCondition operator "+tokens[0]+"; valid operators are "+list(binaryOperators))
       self.comparison = "{} "+str(tokens[0])+" "+str(tokens[1])
-   
+
    def type (self):
       return "goals"
 
@@ -154,7 +153,7 @@ class OpponentCondition (Condition):
 
 class TeamGoalsCondition (GoalCondition):
    desc = """Plays if the total number of goals scored by this team meets the given condition."""
-   
+
    def __init__ (self, **kwargs):
       super().__init__(**kwargs)
 
@@ -185,7 +184,7 @@ class LeadCondition (GoalCondition):
 
 class FirstCondition (Condition):
    desc = """Plays if this is the first goal that the team has scored in this match."""
-   
+
    def __init__ (self, tokens, **kwargs):
       super().__init__(**kwargs)
 
@@ -215,7 +214,7 @@ class ComebackCondition (Condition):
 
 class MatchCondition (Condition):
    desc = """Plays if the match any of the listed types."""
-   types = ["Group", "RO16", "Quarterfinal", "Semifinal", "Final", "Third-Place", "Boss", "Consolation"]
+   types = ["Group", "Survival", "RO16", "Quarterfinal", "Semifinal", "Final", "Third-Place", "Boss", "Consolation"]
    knockout = ["RO16", "Quarterfinal", "Semifinal", "Final", "Third-Place"]
 
    def __init__ (self, tokens, **kwargs):
@@ -294,7 +293,7 @@ class MostGoalsCondition (Condition):
 
    def type (self):
       return "mostgoals"
-   
+
 class SpecialCondition (Condition):
    desc = """(DO NOT SET THIS CONDITION UNDER ANYTHING ELSE OTHER THAN VICTORY ANTHEM, IT WILL BREAK YOUR .4CCM)
 
@@ -388,7 +387,7 @@ class MetaCondition (Condition):
       super().__init__(**kwargs)
       if isinstance(tokens, dict):
          self.sub = []
-         
+
       elif isinstance(tokens, list): # deprecated, will be removed for later conditions
          self.sub = []
          temp = (" ".join(tokens)).split(",")
@@ -531,7 +530,7 @@ class StartInstruction (Instruction):
       player.startTime = self.startTime
 
    def run (self, player):
-      player.song.set_time(self.startTime)
+      player.song.time_pos = self.startTime / 1000.0
 
    def type (self):
       return "start"
@@ -554,7 +553,7 @@ class SpeedInstruction (Instruction):
       player.customSpeed = True
 
    def run (self, player):
-      player.song.set_rate(self.playbackSpeed)
+      player.song.speed = self.playbackSpeed
 
    def type (self):
       return "speed"
@@ -608,7 +607,7 @@ class PauseInstruction (Instruction):
          return
       if self.played % self.every == 0:
          if self.command == "restart":
-            player.song.set_time(player.startTime)
+            player.song.time_pos = player.startTime / 1000.0
 
    def type (self):
       return "pause"
@@ -617,19 +616,32 @@ class PauseInstruction (Instruction):
       return [self.command]
 
 class EndInstruction (Instruction):
-   desc = """Specify action taken when goalhorn reaches the end."""
-   types = ["loop", "stop"]
+   desc = (
+      "Specify action taken when goalhorn reaches the end.\n"
+      "Goalhorns loop by default."
+   )
+   types = ["stop"]
 
    def __init__ (self, tokens, **kwargs):
+      if tokens[0] == "loop":
+         # ;end loop is a no-op: goalhorns loop by default, and this
+         # instruction previously spawned a useless endChecker thread
+         # that prevented rigdio from closing cleanly.
+         # Silently ignore it for backwards compatibility with old 4ccm files.
+         print("Ignoring ';end loop' instruction (goalhorns loop by default).")
+         self.command = "loop"
+         return
       if tokens[0] not in EndInstruction.types:
          raise ValueError("Unrecognised end type (allowed values: {}).".format(", ".join(EndInstruction.types)))
       self.command = tokens[0]
 
    def append (self, player):
+      if self.command != "stop":
+         return
       player.instructionsEnd.append(self)
 
    def prep (self, player):
-      if self.command != "loop":
+      if self.command == "stop":
          player.repeat = False
 
    def run (self, playerManager):
@@ -666,7 +678,7 @@ class WarcryInstruction (Instruction):
 
    def tokens(self):
       return []
-   
+
 class UnrandomInstruction (Instruction):
    desc = """Exclude song from randomised playbacks. Only works on chants."""
 
@@ -684,6 +696,48 @@ class UnrandomInstruction (Instruction):
 
    def type (self):
       return "unrandom"
+
+   def tokens(self):
+      return []
+
+class LouderInstruction (Instruction):
+   desc = """Marks this track for volume boosting. When normalization is enabled, a Volume Boost slider will appear for the team, and its value will be added to the master volume for this track."""
+
+   def __init__ (self, tokens, **kwargs):
+      pass
+
+   def append (self, player):
+      player.instructionsStart.append(self)
+
+   def prep (self, player):
+      player.louder = True
+
+   def run (self, player):
+      pass
+
+   def type (self):
+      return "louder"
+
+   def tokens(self):
+      return []
+
+class AdvanceInstruction (Instruction):
+   desc = """When this song ends, play the next valid goalhorn instead of looping or stopping."""
+
+   def __init__ (self, tokens, **kwargs):
+      pass
+
+   def append (self, player):
+      player.instructionsEnd.append(self)
+
+   def prep (self, player):
+      player.repeat = False
+
+   def run (self, playerManager):
+      playerManager.playSong(skip=playerManager.song)
+
+   def type (self):
+      return "advance"
 
    def tokens(self):
       return []
@@ -742,6 +796,8 @@ conditions = {
    "end" : EndInstruction,
    "warcry" : WarcryInstruction,
    "unrandom" : UnrandomInstruction,
+   "advance" : AdvanceInstruction,
+   "louder" : LouderInstruction,
    "event" : EventInstruction # deprecated, for .4ccm use
 }
 
@@ -752,7 +808,9 @@ instructions = {
    "pause" : PauseInstruction,
    "end" : EndInstruction,
    "warcry" : WarcryInstruction,
-   "unrandom" : UnrandomInstruction
+   "unrandom" : UnrandomInstruction,
+   "advance" : AdvanceInstruction,
+   "louder" : LouderInstruction
 }
 
 def processTokens (tokenStr):

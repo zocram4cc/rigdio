@@ -8,7 +8,7 @@ from rigdj_util import *
 
 class ConditionEditor (Frame):
    """
-      Abstract class 
+      Abstract class
    """
    def __init__ (self, master, cond, conditionType, build = True):
       super().__init__(master)
@@ -97,6 +97,7 @@ class ConditionEditor (Frame):
          "end" : EndInstructionEditor,
          "warcry" : lambda master,cond: EmptyConditionEditor(master,cond,WarcryInstruction),
          "unrandom" : lambda master,cond: EmptyConditionEditor(master,cond,UnrandomInstruction),
+         "louder" : lambda master,cond: EmptyConditionEditor(master,cond,LouderInstruction),
          "special" : SpecialConditionEditor,
          "event" : EventInstructionEditor
       }
@@ -115,7 +116,7 @@ class EmptyConditionEditor (ConditionEditor):
 class GoalConditionEditor (ConditionEditor):
    def __init__ (self, master, cond):
       super().__init__(master,cond,GoalCondition)
-   
+
    def default (self):
       return ["==",2]
 
@@ -135,7 +136,7 @@ class GoalConditionEditor (ConditionEditor):
       countEntry.grid(row=0,column=2,sticky=W)
 
    def validate (self):
-      try: 
+      try:
          int(self.fields[1].get())
       except:
          messagebox.showwarning("Input Error", "Goals condition must be compared to an integer.")
@@ -145,7 +146,7 @@ class GoalConditionEditor (ConditionEditor):
 class TeamGoalConditionEditor (ConditionEditor):
    def __init__ (self, master, cond):
       super().__init__(master,cond,TeamGoalsCondition)
-   
+
    def default (self):
       return ["==",2]
 
@@ -165,7 +166,7 @@ class TeamGoalConditionEditor (ConditionEditor):
       countEntry.grid(row=0,column=2,sticky=W)
 
    def validate (self):
-      try: 
+      try:
          int(self.fields[1].get())
       except:
          messagebox.showwarning("Input Error", "Goals condition must be compared to an integer.")
@@ -195,7 +196,7 @@ class LeadConditionEditor (ConditionEditor):
       countEntry.grid(row=0,column=2,sticky=W)
 
    def validate (self):
-      try: 
+      try:
          int(self.fields[1].get())
       except:
          messagebox.showwarning("Input Error", "Lead condition must be compared to an integer.")
@@ -218,7 +219,7 @@ class EveryConditionEditor (ConditionEditor):
       Label(self, text="Goals By Player").grid(row=0,column=2,sticky=W)
 
    def validate (self):
-      try: 
+      try:
          int(self.fields[0].get())
       except:
          messagebox.showwarning("Input Error", "Every condition must be compared to an integer.")
@@ -245,6 +246,7 @@ class MatchConditionEditor (ConditionEditor):
    def __init__ (self, master, cond):
       self.selector = {}
       self.buttons = {}
+      self.selectColour = settings.darkColours['bg'] if settings.config["dark_mode_enabled"] else settings.lightColours['bg']
       ConditionEditor.__init__(self,master,cond,MatchCondition)
 
    def default (self):
@@ -257,14 +259,14 @@ class MatchConditionEditor (ConditionEditor):
          Label(checkerFrame,text=key).grid(row = i, column = 0)
          key = key.lower()
          self.selector[key] = IntVar()
-         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key])
+         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key],selectcolor=self.selectColour)
          self.buttons[key].grid(row=i, column = 1)
 
          key = MatchCondition.types[i+len(MatchCondition.types)//2]
          Label(checkerFrame,text=key).grid(row = i, column = 2)
          key = key.lower()
          self.selector[key] = IntVar()
-         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key])
+         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key],selectcolor=self.selectColour)
          self.buttons[key].grid(row=i, column = 3)
          i += 1
       if len(MatchCondition.types) % 2 != 0:
@@ -272,7 +274,7 @@ class MatchConditionEditor (ConditionEditor):
          Label(checkerFrame,text=key).grid(row = len(MatchCondition.types)//2, column = 0)
          key = key.lower()
          self.selector[key] = IntVar()
-         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key])
+         self.buttons[key] = Checkbutton(checkerFrame,variable=self.selector[key],selectcolor=self.selectColour)
          self.buttons[key].grid(row=len(MatchCondition.types)//2, column = 1)
 
       for token in tokens:
@@ -326,7 +328,7 @@ class MostGoalsConditionEditor (ConditionEditor):
          return []
       else:
          return super().tokens()
-      
+
 class SpecialConditionEditor (ConditionEditor):
    def __init__(self, master, cond):
       super().__init__(master, cond, SpecialCondition)
@@ -475,14 +477,14 @@ class EndInstructionEditor (ConditionEditor):
       super().__init__(master,cond,EndInstruction)
 
    def default (self):
-      return ["loop"]
+      return ["stop"]
 
    def build (self, tokens):
       self.fields.append(StringVar())
       if tokens[0] in EndInstruction.types:
          self.fields[0].set(tokens[0])
       else:
-         self.fields[0].set("loop")
+         self.fields[0].set("stop")
       selector = OptionMenu(self, self.fields[0], *EndInstruction.types)
       setMaxWidth(EndInstruction.types, selector)
       selector.pack()
@@ -511,7 +513,7 @@ class ConditionDialog (Dialog):
       # UI information
       self.fields = []
       self.elements = []
-      # check if new 
+      # check if new
       self.new = new
       self.editor = None
       Dialog.__init__(self,master,"Editing Condition")
@@ -588,7 +590,7 @@ class ConditionDialog (Dialog):
       if self.editor is not None:
          self.editor.pack_forget()
          self.editor = None
-      
+
       # update description label
       if value == "":
          self.conditionDescLabel['text'] = "No condition type selected."
@@ -599,4 +601,3 @@ class ConditionDialog (Dialog):
       if value != "":
          self.editor = ConditionEditor.getEditor(value)(self.editFrame,self.condition)
          self.editor.pack()
-      

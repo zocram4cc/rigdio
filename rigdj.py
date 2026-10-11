@@ -2,15 +2,20 @@ from version import rigdj_version as version
 
 from io import StringIO
 
+import sys
+from os.path import abspath, join
+
 from tkinter import *
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 
-from config import settings
+from config import settings, openConfig, applyDarkMode, applyLightMode, saveConfig
 from condition import *
 from conditioneditor import ConditionDialog
+import settingswindow
 
 from rigdj_util import *
+from uiutil import ToolTip, palette
 from rigparse import parse, reserved
 
 from logger import startLog
@@ -110,7 +115,7 @@ class SongRow:
       self.strRow = StringVar()
       # baseElements is all non-ConditionButton objects, constant across all SongRow objects
       self.baseElements = self.buildBaseElements()
-      # conditionButtons is the 
+      # conditionButtons is the
       self.conditionButtons = []
       # self.elements is a list of all elements in the row; it's baseElements + conditionButtons.
       self.elements = self.baseElements
@@ -140,7 +145,7 @@ class SongRow:
       self.sv = StringVar()
       self.sv.trace_add("write", self.updateName)
       # the entry object itself
-      self.songNameEntry = Entry(self.master, width=50, textvariable=self.sv)
+      self.songNameEntry = Entry(self.master, width=50, textvariable=self.sv, bg=palette()["panel"])
       output.append(self.songNameEntry)
       # extra spacing, if you haven't figured out the pattern yet
       output.append(Label(self.master,text=" "))
@@ -179,13 +184,13 @@ class SongRow:
       for element in self.elements:
          element['state'] = 'normal'
          element.grid_forget()
-      
+
       # disable arrows if the row is inappropriate
       if self.row == 1:
          self.baseElements[4]['state'] = 'disabled'
       if self.row == self.songed.count():
          self.baseElements[2]['state'] = 'disabled'
-      
+
       if self.master.master.current == 'chant':
          # for chants, build only a check button to include/exclude from random playback
          self.conditionButtons = [UnrandomButton(self.master, self)]
@@ -262,8 +267,8 @@ class SongEditor (Frame):
       """
          Constructor.
       """
-      # frame init
-      super().__init__(canvas)
+      # frame init — match the main background, not the panel
+      super().__init__(canvas, bg=palette()["bg"])
       # songrows is empty to start
       self.songrows = []
       self.newSongButton = Button(self,text="Add Song",command=self.addSong)
@@ -393,12 +398,12 @@ class SongEditor (Frame):
       # load special VA section title
       self.specialLabel.grid_forget()
       self.specialLabel.grid(row=0,column=0,columnspan=999,sticky=E+W, padx=2, pady=2)
-      # use the same song row list as the regular section, they're 
+      # use the same song row list as the regular section, they're
       for index in range(len(self.songrows)):
          songrow = self.songrows[index]
          songrow.row = index+1
          songrow.update(callback=False)
-      
+
       # move the special VA new song button (using songrows guarantees it stays at the bottom of the frame)
       self.newSongButtonSpecial.grid_forget()
       self.newSongButtonSpecial.grid(row=len(self.songrows)+1,column=0,columnspan=3,sticky=E+W, padx=2, pady=2)
@@ -417,8 +422,8 @@ class SongEditor (Frame):
          self.checkOkay = False
          # loops through the list of conditions and instructions, breaks once a randomise instruction is found
          for cond in clists[i]:
-            # do not count songs with warcry/special instructions on them
-            if cond.type() in ['randomise', 'warcry', 'special']:
+            # do not count songs with advance/special instructions on them
+            if cond.type() in ['randomise', 'advance', 'special']:
                self.checkOkay = True
                break
          # if no randomise instruction is found, set the value to false and break the loop
@@ -506,8 +511,8 @@ class SongEditor (Frame):
 class PlayerSelectFrame (Frame):
    def __init__ (self, editor, command = None, players = []):
       super().__init__(editor)
-      
-      self.newPlayerEntry = Entry(self, width=30)
+
+      self.newPlayerEntry = Entry(self, width=30, bg=palette()["panel"])
       self.newPlayerEntry.grid(row=0,column=1, sticky=N+W,padx=5,pady=10)
       # songs for each player
       self.songs = {
@@ -517,7 +522,8 @@ class PlayerSelectFrame (Frame):
          "chant" : []
       }
       # create list selector with default options
-      self.playerMenu = ScrollingListbox(self,exportselection=False)
+      # use white background in light mode for the editable panel areas
+      self.playerMenu = ScrollingListbox(self,exportselection=False, bg=palette()["panel"])
       self.playerMenu.insert(END,"Anthem")
       self.playerMenu.insert(END,"Victory Anthem")
       self.playerMenu.insert(END,"Goalhorn")
@@ -539,7 +545,7 @@ class PlayerSelectFrame (Frame):
       buttonFrame.grid(row=0,column=0,padx=5,pady=5)
 
       # create song editor
-      self.canvas = Canvas(self)
+      self.canvas = Canvas(self, bg=palette()["bg"], highlightthickness=0)
       scrollbar = Scrollbar(self, orient="vertical", command=self.canvas.yview)
       self.canvas.configure(height=300, yscrollcommand=scrollbar.set)
 
@@ -673,15 +679,15 @@ class PlayerSelectFrame (Frame):
 
    def randomiseHorns (self):
       """
-         When checked on, sets all horns of currently selected player to have only the "randomise" condition (as well as remove the 'Add Condition' button),
-         which has Rigdio randomly select a horn from the list instead of following priority. Horns which have the warcry or special instruction do not have the randomise instruction applied to them.
-         When checked off, resets all horns to have no condition.
+         When checked on, sets all horns of currently selected player to have the "randomise" condition (as well as remove the 'Add Condition' button),
+         which has Rigdio randomly select a horn from the list instead of following priority. Horns which have the advance or special instruction do not have the randomise instruction applied to them.
+         When checked off, removes the randomise instruction from all horns.
       """
       if self.randomHornVar.get() == 1:
          for row in self.songEditor.songrows:
             noAppend = False
             for cond in row.clist:
-               if cond.type() in ['randomise', 'warcry', 'special']:
+               if cond.type() in ['randomise', 'advance', 'special']:
                   noAppend = True
                   break
             if not noAppend:
@@ -728,7 +734,8 @@ class Preview4CCM (Frame):
       super().__init__(master, editor, **kwargs)
       self.editor = editor
       self.buffer = StringIO()
-      self.text = Text(self, state=DISABLED, width=60, bg="#f0f0ed")
+      # use the main background colour to signal the preview is read-only
+      self.text = Text(self, state=DISABLED, width=60, bg=palette()["bg"])
       self.text.pack(fill=Y,expand=1)
 
    def update (self):
@@ -743,12 +750,23 @@ class Editor (Frame):
    def __init__ (self, master):
       # tkinter master window
       super().__init__(master)
-      # save/load
-      fileMenu = self.buildFileMenu()
-      fileMenu.pack(anchor="nw")
+      # colour palette (updated by toggleDarkMode)
+      self.colours = settings.darkColours if settings.config["dark_mode_enabled"] else settings.lightColours
+      # top bar: file menu on the left, dark mode toggle on the right
+      topBar = Frame(self)
+      fileMenu = self.buildFileMenu(topBar)
+      fileMenu.pack(side=LEFT, anchor="nw")
+      self.darkModeBtn = Button(topBar,
+         text="Dark Mode: On" if settings.config["dark_mode_enabled"] else "Dark Mode: Off",
+         command=self.toggleDarkMode)
+      self.darkModeBtn.pack(side=RIGHT, anchor="ne")
+      topBar.pack(fill=X)
       self.previewer = None
       # file name of the .4ccm
       self.filename = None
+      # team flags (sync and normalize both default to yes/enabled)
+      self.syncVar = IntVar(value=1)
+      self.normalizeVar = IntVar(value=1)
       # team name editor and previewer
       leftFrame = Frame(self, pady=5)
       temp = Frame(leftFrame)
@@ -757,33 +775,117 @@ class Editor (Frame):
       self.sv = StringVar()
       self.sv.trace_add("write", self.updateEditor)
       # create the actual entry object
-      self.teamEntry = Entry(temp, width=20, textvariable=self.sv)
+      self.teamEntry = Entry(temp, width=20, textvariable=self.sv, bg=palette()["panel"])
       self.teamEntry.pack(side=LEFT)
+
+      # team flags section (sync and normalize opt-outs)
+      # both flags default to enabled (checked); unchecking writes ";no" to the .4ccm
+      flagsFrame = Frame(leftFrame)
+      flagsRow = Frame(flagsFrame)
+      flagsRow.pack(anchor="w")
+      # sync flag checkbox + info icon with tooltip
+      self.syncVar.trace_add("write", self.updateEditor)
+      self.syncCheck = Checkbutton(flagsRow, text="Share goalhorn position (sync)",
+         variable=self.syncVar)
+      self.syncCheck.pack(side=LEFT)
+      syncInfo = Label(flagsRow, text="ⓘ", fg=palette()["fg"], cursor="question_arrow")
+      syncInfo.pack(side=LEFT, padx=(2,33))
+      ToolTip(syncInfo,
+         "When enabled, goalhorn songs used by multiple players resume\n"
+         "from where they left off when switching between players.\n"
+         "Uncheck if you want every player to have their own unique copy\n"
+         "of those songs, so they'll always play from the start."
+      )
+      # normalize flag checkbox + info icon with tooltip
+      self.normalizeVar.trace_add("write", self.updateEditor)
+      self.normalizeCheck = Checkbutton(flagsRow, text="Allow volume normalization",
+         variable=self.normalizeVar)
+      self.normalizeCheck.pack(side=LEFT)
+      normInfo = Label(flagsRow, text="ⓘ", fg=palette()["fg"], cursor="question_arrow")
+      normInfo.pack(side=LEFT, padx=(2,0))
+      ToolTip(normInfo,
+         "When enabled, rigdio analyzes each track's loudness and applies\n"
+         "gain so all songs play at a consistent volume level.\n"
+         "Uncheck if your export is already pre-normalized and you want\n"
+         "rigdio to use the files as-is (the streamer can still force it\n"
+         "back on after load, if the files are too loud or quiet)."
+      )
 
       # player menu
       self.playerMenu = PlayerSelectFrame(self)
       # previewer
       self.previewer = Preview4CCM(leftFrame,self)
       temp.pack(anchor="w")
+      flagsFrame.pack(anchor="w", pady=(5,5))
       self.previewer.pack()
       # pack playermenu after leftFrame
       leftFrame.pack(anchor="nw",side=LEFT)
       self.playerMenu.pack(anchor="nw",side=LEFT)
-      
-   def buildFileMenu (self):
+
+   def buildFileMenu (self, parent=None):
       """
          Constructs the file save/load menu buttons.
       """
-      buttons = Frame(self)
+      buttons = Frame(parent if parent is not None else self)
       Button(buttons, text="New .4ccm", command=self.clear4ccm).pack(side=LEFT)
       Button(buttons, text="Load .4ccm", command=self.load4ccm).pack(side=LEFT)
       Button(buttons, text="Save .4ccm", command=self.save4ccm).pack(side=LEFT)
       Button(buttons, text="Save .4ccm As...", command=self.save4ccmas).pack(side=LEFT)
       return buttons
 
+   def toggleDarkMode (self):
+      """Toggle dark mode on/off live and persist the setting to config.yml."""
+      # flip the config value
+      settings.configs["config"]["dark_mode_enabled"] = 0 if settings.config["dark_mode_enabled"] else 1
+      self._applyDarkMode()
+      # persist to config.yml
+      saveConfig()
+      print("Dark mode {}.".format("enabled" if settings.config["dark_mode_enabled"] else "disabled"))
+
+   def _applyDarkMode (self):
+      """Apply the current dark_mode_enabled config value to the UI."""
+      dark = settings.config["dark_mode_enabled"]
+      # apply the palette to the root window
+      root = self.winfo_toplevel()
+      if dark:
+         applyDarkMode(root)
+      else:
+         applyLightMode(root)
+      # update widget backgrounds that use explicit colours
+      self.colours = palette()
+      if self.previewer is not None:
+         self.previewer.text.configure(bg=self.colours["bg"])
+      if hasattr(self, 'playerMenu'):
+         self.playerMenu.playerMenu.configure(bg=self.colours["panel"])
+         self.playerMenu.canvas.configure(bg=self.colours["bg"])
+         self.playerMenu.songEditor.configure(bg=self.colours["bg"])
+         self.playerMenu.newPlayerEntry.configure(bg=self.colours["panel"])
+         # update song name entries in existing rows
+         for row in self.playerMenu.songEditor.songrows:
+            if hasattr(row, 'songNameEntry'):
+               row.songNameEntry.configure(bg=self.colours["panel"])
+      if hasattr(self, 'teamEntry'):
+         self.teamEntry.configure(bg=self.colours["panel"])
+      # update the button label
+      self.darkModeBtn.configure(text="Dark Mode: On" if dark else "Dark Mode: Off")
+
+   def openSettings (self):
+      # keep a reference so the SettingsWindow (and its IntVars) aren't
+      # garbage-collected while the Toplevel is still open
+      self.settingsWin = settingswindow.SettingsWindow(self, restart=False,
+         onsave=self._onSettingsSaved)
+
+   def _onSettingsSaved (self, changed_keys):
+      # apply dark mode live if it was changed (config already has the new value)
+      if "dark_mode_enabled" in changed_keys:
+         self._applyDarkMode()
+
    def clear4ccm (self):
       self.filename = None
       self.teamEntry.delete(0,END)
+      # reset team flags to defaults (both enabled)
+      self.syncVar.set(1)
+      self.normalizeVar.set(1)
       self.playerMenu.updateList([])
       self.playerMenu.updateSongs({})
 
@@ -793,12 +895,15 @@ class Editor (Frame):
 
    def load4ccm (self):
       self.filename = filedialog.askopenfilename(filetypes = (("Rigdio export files", "*.4ccm"),("All files","*")))
-      songs, teamName, events = parse(self.filename,False)
+      songs, teamName, events, sync, normalize = parse(self.filename,False)
       uiConvert(songs)
 
       self.teamEntry.delete(0,END)
       self.teamEntry.insert(0,teamName)
       self.teamEntry.xview_moveto(1)
+      # set team flag checkboxes from the parsed .4ccm flags
+      self.syncVar.set(1 if sync else 0)
+      self.normalizeVar.set(1 if normalize else 0)
       normalPlayers = [x for x in songs if x not in specialNames]
       self.playerMenu.updateList(normalPlayers)
       self.playerMenu.updateSongs(songs)
@@ -819,12 +924,17 @@ class Editor (Frame):
       if self.teamEntry.get() == "" and outfile != self.previewer.buffer: # allow empty team name when writing to preview buffer
          messagebox.showerror("Error","Team name cannot be empty.")
          return None
-   
+
       players = self.playerMenu.songs
       flag = False
       outConvert(players)
       print("# team identifier", file=outfile)
       print("name;{}".format(self.teamEntry.get()), file=outfile)
+      # write team-level flags (only when opting out, since yes is the default)
+      if self.syncVar.get() == 0:
+         print("sync;no", file=outfile)
+      if self.normalizeVar.get() == 0:
+         print("normalize;no", file=outfile)
       print("",file=outfile)
       print("# reserved names", file=outfile)
       # count number of special VAs and see if it matches VA list length (all VAs are special)
@@ -856,15 +966,42 @@ class Editor (Frame):
                print("List for player {} is empty, will be ignored.").format(player)
       uiConvert(players)
 
+def resource_path(relative_path):
+   """ Get absolute path to resource, works for dev and for PyInstaller """
+   try:
+      # PyInstaller creates a temp folder and stores path in _MEIPASS
+      base_path = sys._MEIPASS
+   except Exception:
+      base_path = abspath(".")
+   return join(base_path, relative_path)
+
 def main ():
    # tkinter master window
    mainWindow = Tk()
+   try:
+      datafile = resource_path("rigdj.ico")
+      mainWindow.iconbitmap(default=datafile)
+   except:
+      pass
+   # change window palette to dark mode if enabled in config
+   if settings.config["dark_mode_enabled"]:
+      applyDarkMode(mainWindow)
+   else:
+      applyLightMode(mainWindow)
+
    mainWindow.title("rigDJ {}".format(version))
    # construct editor object in window
    dj = Editor(mainWindow)
    dj.pack()
-   # run
-   mainloop()
+   # if config file was generated, ask if user wants to open settings
+   if settings.fileGen:
+      if openConfig():
+         dj.openSettings()
+   try:
+      mainloop()
+   except RuntimeError as e:
+      print("Error occurred: {}".format(e))
+      return
 
 if __name__ == '__main__':
    main()

@@ -2,14 +2,19 @@ import yaml
 from logger import startLog
 from tkinter import *
 from tkinter import messagebox
-import os
+
 
 defaults = dict(
    config=dict(
       alphabetical_sort_goalhorns=0, # sort player goalhorns alphabetically
       alphabetical_sort_chants=0, # sort team chants alphabetically
       chant_timer_enabled_default=1, # enable chant timer by default
-      show_goalhorn_volume_default=0, # show goalhorn volume sliders by default
+      chant_random_decay_weight=0.3, # base for exponential decay weighting when picking random chants (lower = less repeat)
+      chant_loud_part_percent=20, # percentage of loudest 1-second windows used as normalization reference for chants (0-100; lower targets only the loudest part, 100 = whole-track mean)
+      dark_mode_enabled=0, # enable dark mode
+      show_goalhorn_volume_default=1, # show goalhorn volume sliders by default
+      normalize_volume=1, # normalize all music to a consistent loudness level (uses target from level config); replaces individual volume sliders with a single master volume slider
+      write_song_title_log=0, # write a title.log file that contains the current song's title/filename before clearing it, values above 0 set the timer in seconds, -1 keeps it for the whole song
       write_to_log=1, # allow rigdio/rigdj to write log files (some systems don't allow rigdio/rigdj to write to log, causing it to crash)
       webserver_enabled=1,
       webserver_port=31338
@@ -17,11 +22,34 @@ defaults = dict(
    fade=dict(
       anthem=True,
       goalhorn=True,
+      chant=True,
+      victory=True,
       time=2
    ),
-   colours=dict(
+   lightColours=dict(
+      bg='#f0f0f0',
+      fg='#1e1e1e',
+      panel='#ffffff',
       home='#e0e0fc',
-      away='#ffe0dd'
+      away='#ffe0dd',
+      stop='#f9fce0',
+      kill='#2bb4ee',
+      load='#e0fcea',
+      normalize='#eae0fc',
+      reset='#e0fcea'
+   ),
+   darkColours=dict(
+      bg='#1e1e1e',
+      fg='#ffffff',
+      panel='#2a2a2a',
+      accent='#659037',
+      home='#3b3f51',
+      away='#513b3b',
+      stop='#4a4e2a',
+      kill='#377590',
+      load='#2a4e3a',
+      normalize='#3a2f5f',
+      reset='#2a4e3a'
    ),
    gameMinute=6.67,
    level=dict(
@@ -30,33 +58,45 @@ defaults = dict(
    match="Group"
 )
 
-import platform
-
-def open_file(filename):
-    if platform.system() == 'Windows':
-        os.startfile(filename)
-    else:
-        os.system(f'xdg-open {filename}')
-
 def genConfig():
    # create config.yml file, return early if it already exists
    try:
       file = open("config.yml",'x')
    except:
-      return
+      return False
    # fill yml file with default configs
    yaml.dump(defaults["config"], file, default_flow_style=False)
+   return True
 
-   # create prompt window asking if user wishes to view config file
-   # root window required to display messagebox, hidden and then destroyed immediately after the prompt
-   root = Tk()
-   root.overrideredirect(1)
-   root.withdraw()
-   confirm = messagebox.askyesnocancel("Config file created",
-   "First time run detected, config file with default settings set has been created. Do you wish to open it now?")
-   if (confirm):
-      open_file("config.yml")
-   root.destroy()
+# create prompt window asking if user wishes to view config file
+def openConfig():
+   confirm = messagebox.askyesno("Config file created",
+   "First time run detected, a config file with defaults has been created. Do you wish to open the Settings menu now?")
+   return confirm
+
+def applyDarkMode(root):
+   root.tk_setPalette(
+      background=settings.darkColours["bg"],
+      foreground=settings.darkColours["fg"],
+      activeBackground=settings.darkColours["accent"],
+      activeForeground=settings.darkColours["fg"],
+      highlightColor=settings.darkColours["accent"])
+
+def applyLightMode(root):
+   root.tk_setPalette(
+      background=settings.lightColours["bg"],
+      foreground=settings.lightColours["fg"],
+      activeBackground=settings.lightColours["home"],
+      activeForeground=settings.lightColours["fg"],
+      highlightColor=settings.lightColours["kill"])
+
+def saveConfig():
+   """Write the current config values back to config.yml."""
+   try:
+      with open("config.yml", "w") as configFile:
+         yaml.dump(settings.configs["config"], configFile, default_flow_style=False)
+   except Exception as e:
+      print("Error saving config file:", e)
 
 def recursiveDictCheck(d, defaultD, location):
    for key in defaultD:
@@ -74,7 +114,8 @@ def recursiveDictCheck(d, defaultD, location):
 
 class ConfigValues:
    def __init__(self):
-      genConfig()
+      # generate config file, store bool of whether file already existed
+      self.fileGen = genConfig()
 
       if self.readWriteToLog():
          startLog("rigdio.log")
@@ -99,7 +140,7 @@ class ConfigValues:
          print("Default values will be used.")
          self.configs = defaults
          return
-      
+
       try:
          self.checkConfig()
          defaults["config"] = self.configs
@@ -113,14 +154,19 @@ class ConfigValues:
    def checkConfig(self):
       recursiveDictCheck(self.configs, defaults["config"], "config.yml")
       mustBeValid = [
-                      'alphabetical_sort_goalhorns:int',
-                      'alphabetical_sort_chants:int',
-                      'chant_timer_enabled_default:int',
-                      'show_goalhorn_volume_default:int',
-                      'write_to_log:int',
-                      'webserver_enabled:int',
-                      'webserver_port:int'
-                    ]
+         'alphabetical_sort_goalhorns:int',
+         'alphabetical_sort_chants:int',
+         'chant_timer_enabled_default:int',
+         'dark_mode_enabled:int',
+         'show_goalhorn_volume_default:int',
+         'normalize_volume:int',
+         'write_to_log:int',
+         'write_song_title_log:int',
+         'chant_random_decay_weight:float',
+         'chant_loud_part_percent:int',
+         'webserver_enabled:int',
+         'webserver_port:int'
+      ]
       for item in mustBeValid:
          items = item.split(':')
          entry = self.configs[items[0]]
@@ -129,6 +175,9 @@ class ConfigValues:
          try:
             if items[1] == "int":
                if not isinstance(entry, int):
+                  raise ValueError
+            elif items[1] == "float":
+               if not isinstance(entry, (int, float)):
                   raise ValueError
          except ValueError:
             print("config.yml error: {} must be {}; using default value {}.".format(items[0], items[1], default))

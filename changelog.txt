@@ -1,0 +1,375 @@
+15/08/26 - Version v2.2.0 & RigDJ v1.16.0
+- Added "normalize;no" modifier in .4ccm files
+  Managers with a curated, pre-normalized music export can opt out of loudness
+  normalization by writing "normalize;no" below the team name (like "sync;no")
+  When set, rigdio skips loudness analysis and uses a baseline of 0 dB for all of
+  that team's tracks (volume boost still applies to louder-marked tracks)
+- Added per-team "Normalize: Yes / No" toggle button below the Reset buttons
+  Only shown when normalize_volume is enabled in config.yml
+  Lets the streamer force normalization on for a team that opted out
+  "Normalize: No" is shown in bold to make opted-out teams noticeable
+- Chant normalization now focuses on the loudest portion of the track (top 20%) instead
+  of the whole-track mean, preventing over-boosting of chants with long quiet sections
+- Background loudness analysis now prioritizes anthems over goalhorns over chants
+  over victory anthems, minimizing the chance of blocking on anthem playback right
+  after loading a team
+- Added a dedicated Chants Volume slider to the main window, always visible
+  When normalization is enabled, it acts as a dB offset on top of the Master Volume
+  slider (so chants can be made quieter or louder relative to songs)
+  The chants window now always shows the same Chants Volume slider, and the two stay
+  synchronized
+- RigDJ now reads, displays, and preserves the "sync" and "normalize" team flags
+  Both default to checked (enabled), unchecking writes "sync;no" or "normalize;no"
+  to the .4ccm file
+- RigDJ now has a Dark Mode toggle button in the top-right corner
+  The setting is saved to config.yml and persists across restarts
+- Added a Settings window to rigdio, with descriptions for each setting in the config.yml
+- Undo now restores the cached playback position, warcry flag, and firstPlay state to
+  what they were before the goal was scored. Previously Undo only reverted the score,
+  the wrongly-clicked goalhorn would keep its playback position and warcry state
+- Loading a 4ccm now fully resets the team previously in that slot (stops music,
+  clears cached positions, resets event timers) before replacing it
+- Fixed the Reset button only clearing the most recently played song's cached position
+  instead of all songs on the team; it now fully resets every song's playback state
+- Switched from onefile to onedir packaging with a shared _internal folder
+
+31/07/26 - Version v2.1.0 & RigDJ v1.15.0
+- Reworked volume sliders to use perceptual dB scaling instead of raw values
+  Sliders now feel more linear to the ear instead of dropping off too quickly at low values
+- Implemented proper volume boosting
+  Instead of the previous 0~100% volume bar which started at 80%, you now get a
+  -20db ~ +20db bar which starts at 0dB (corresponding to 100% on the old one)
+  Volume slider knobs now change color from purple to red based on volume level
+- Implemented automatic volume leveling
+  When you load a music export, it analyzes every song's volume and applies some gain so they're all
+  at the same level, which means no more quiet goalhorns and chants and no more need to fiddle with
+  a different slider for each goalhorn
+  Enabled by default, and when enabled you get a single Master Volume slider
+  Sound files with the "_normalized" prefix are now ignored for consistency in volume across teams
+  Riglevel is no longer included, this feature makes it redundant
+- Added "Reset" buttons below the Load Team buttons
+  They stop all music and reset chants, events, and score for each team so they can be loaded fresh
+  Useful when a team is scheduled for the following match
+  Reset is done in-place without reloading the physical music files, for extra speed
+- Added "louder" instruction for per-track volume boosting
+  Mark any track with ;louder in the .4ccm file (also available in RigDJ's condition editor)
+  When a loaded team has at least one louder-marked track and normalization is enabled, a Volume
+  Boost slider appears for that team (-5 dB to +15 dB, default +5 dB), this boost is added on top of
+  the master volume for any tracks marked as louder
+  The "Volume Boost" label blinks while a boosted track is playing
+- Removed "end loop" instruction
+  Goalhorns already loop by default, making this instruction redundant
+  It also caused a bug where closing rigdio while a goalhorn with ;end loop was playing would leave
+  the process running in the background with audio still playing
+  Existing 4ccm files containing ;end loop will load fine, the instruction is silently ignored
+- Reduced the package size by more than half by preparing a minified version of the ffmpeg exe
+
+19/07/26 - Version v2.0.0
+- Migrated the media library to use MPV instead of VLC, solving several volume issues
+- Fixed anthems and goalhorns sometimes not playing after a warcry ended
+- Made chant random decay weight configurable (chant_random_decay_weight in config.yml)
+  Lower it to make repeats less likely, set it to 0.0 to prevent repeats completely
+- Excluded warcry goalhorns from position caching to prevent them from playing only once
+- Made the randomise condition usable on warcry goalhorns and anthems
+  This allows you to use multiple random warcries on the same player or on the victory anthem
+
+
+16/07/26 - Version v1.21.0 & RigDJ v1.14.0
+- Added "advance" instruction: when a song ends, plays the next valid goalhorn instead of looping or
+  stopping
+- Added "sync" flag in .4ccm files to opt out of shared playback position (which stays on by
+  default) by writing "sync;no"
+- Added weighted random chant selection to reduce chant repetition (chants which already played are
+  much less likely to be picked again)
+- Fixed volume not being set correctly on chant playback start
+- Fixed compiled executable not including the application icon in the bundle
+- Non-goalhorn songs (anthems, chants) no longer use shared MediaPlayer caching, speeding up their
+  loading
+- Improved performance by skipping unnecessary MediaPlayer stop calls on already-stopped media
+
+11/07/26 - Version v1.20.0
+- Songs with the same filename now share playback position when switching between players (e.g.
+  stopping one player's goalhorn and clicking another with the same file resumes from where it left
+  off)
+- Fixed rare crash on startup when running as a compiled executable with logging enabled
+- Fixed audible pop/click when stopping a goalhorn with fadeout enabled
+
+18/01/26 - Version v1.19.4
+- Reduced CPU usage during song playback and title log writing
+
+08/01/26 - Version v1.19.3
+- Reduced CPU usage when chants are playing
+
+04/01/26 - Version v1.19.2
+- Fixed UI freeze when playing chants with the chant window open
+- Fixed issue where Rigdio couldn't load music exports with special victory anthems
+
+22/12/25 - Version v1.19.1
+- Added dark mode option for all programs (Rigdio, RigDJ, Riglevel)
+
+22/12/25 - Version v1.19.0
+- Added Survival Round option to match condition
+- Goalhorn volume slider is now shown by default
+
+02/09/22 - Version v1.122 (RigDJ)
+- Special victory anthem condition now has a description warning about misuse
+- Prevented editing of special conditions in RigDJ to avoid breaking .4ccm files
+
+03/04/22 - Version v1.121 (RigDJ)
+- Empty chants are no longer written to .4ccm files
+- Fixed victory anthem fallback logic when no victory anthem is provided
+
+26/07/25 - Version v1.18.3
+- Riglevel: Normalization now avoids peak clipping
+- Riglevel: Added support for opening .opus files
+- RigDJ: Added .opus as supported file type
+- Fixed bug where home anthem couldn't be played if clicked first
+- Riglevel: Sound levels now shown with 3 decimal places
+- Riglevel: Lowered default target audio level to -1.0 dBFS
+- Riglevel: Switched default export format to .opus
+
+20/07/25 - Version v1.18.0
+- Added Riglevel audio normalization tool (v0.1.0)
+- Added option to exclude chants from randomised playbacks
+- Added option to sort chants and goalhorns alphabetically (configurable)
+- Added option to show/hide goalhorn volume sliders by default (configurable)
+- Added configurable default state for chant timer
+- Added custom labels for special victory anthems
+- Added fadeout when stopping a chant early
+- Chant button names now show without file extension or "_normalized" suffix
+- Fixed issue where normalized chants and reloaded songs couldn't play
+- Fixed issue where users couldn't add new special victory anthems in RigDJ
+- Fixed home anthem not waiting for away anthem fadeout to finish
+- "File not found" error now shows just the filename instead of the full path
+
+05/03/22 - Version v1.172
+- Fixed away anthem not being paused when home anthem is played
+- Victory anthem timer now starts correctly (moved from PlayerButtons to PlayerManager)
+
+14/02/22 - Version v1.171
+- Fixed randomised goalhorns not playing correctly after a warcry
+
+14/02/22 - Version v1.17 & RigDJ v1.12
+- Added warcry instruction: short songs that play before falling through to the next non-warcry song
+- Added special victory anthem condition and dropdown menu for selecting them
+- Added "Stop Chant Early" button on main window
+- Added random chant buttons on main window
+- Added playback speed slider on main window (replaces per-team slider)
+- Added chaoshorn (nuclear mode) button to play all goalhorns simultaneously
+- Added volume show/hide toggle button for each player
+- Chant random button now shuffles through all chants instead of random picking
+- Chant timer enabled by default
+- Instruction system reworked: instructions now have separate append/prep/run phases
+- End instruction "next" command removed in favor of warcry instruction
+- Speed instruction now properly marks songs as having custom speed
+
+25/09/21 - Version v1.164
+- Added error message for UnicodeDecodeError when file names contain non-Unicode characters
+- Disabled video track playback in VLC (no-video flag)
+- Removed easter egg chant override
+
+09/07/21 - Version v1.163
+- Chants are now properly cleared when loading a team with no chants
+
+09/10/20 - Version v1.162
+- Fixed random chant buttons using the wrong team's chant list after loading
+
+25/09/20 - Version v1.161
+- Fixed randomised goalhorns selecting songs from other players
+
+24/09/20 - Version v1.16 & RigDJ v1.11
+- Added chants window with volume slider, timer, and individual chant buttons
+- Added "Randomise Horns" checkbox in RigDJ for easy randomisation of all goalhorns
+- Added chant timer with configurable duration (20-60 seconds) and fadeout
+- Playback speed slider now reflects custom speed set in .4ccm on first play
+- Playback speed slider moved from per-team to main window
+- Chant state (active chant, timer, volume) now managed centrally
+
+24/07/20 - Version v1.151
+- Re-enabled event instruction for .4ccm files (deprecated but functional)
+
+24/07/20 - Version v1.15 & RigDJ v1.10
+- Added victory anthem timer showing elapsed time and total duration
+- Added "first" condition: plays on team's first goal of the match
+- Added "comeback" condition: plays when team was behind before scoring
+- Added "teamgoals" condition: plays based on total team goals
+- Removed magic shortcut conditions (brace, hattrick, etc.) in favor of explicit conditions
+- Chants now properly stop when chants window is closed
+- Newly loaded chants now follow current volume slider setting
+- Random chant button no longer affected by volume slider
+- RigDJ: Fixed compatibility with newer Python/Tkinter versions
+
+17/07/20 - Version v1.141
+- Fixed chant timer using stale values when adjusted during playback
+
+05/03/20 - Version v1.14
+- Added random chant button in chants window
+- Added per-team playback speed slider (0.25x to 4x)
+- Playback speed slider disables during playback to show current speed
+- Reset button now visually raises the play button
+- Fixed reset not stopping the currently playing song
+
+21/01/20 - Version v1.13
+- Added chant timer with enable/disable checkbox
+- Added chant timer slider (20-60 seconds) with automatic fadeout
+- Timer controls greyed out during chant playback to prevent issues
+- Chants now properly stop when chants window is closed
+
+14/01/20 - Version v1.121
+- Fixed chant window not updating when loading a team with no chants
+
+14/01/20 - Version v1.12
+- Chants now play one at a time; new chant requests denied while another is playing
+- Added chant fadeout timer (25 seconds default) with automatic stop
+- Chants automatically detected as finished or timed out
+- Chants properly stop when chants window is closed
+
+13/01/20 - Version v1.11
+- Removed SENPAI integration
+- Added manual chants window accessible from main window
+- Individual chant buttons for home and away teams
+- Default volume changed from 100 to 80
+
+26/10/18 - Version v1.10
+- Internal code migration to legacy files in preparation for v2.0
+- Added magic shortcut conditions: brace, brace+, hattrick, hattrick+
+- Re-enabled manual chant buttons
+- Added event instruction editor in RigDJ
+- Chants now play in extra time
+- Configurable chant count per half (first half, second half, free, extra time)
+- Configurable default match type via rigdio.yml
+- Improved load messaging for events and chants
+- Added manual chant window with individual chant buttons per team
+
+24/02/18 - Version v1.9 "The Coffee of Woodo"
+- Added chant support with automatic playback during matches
+- Added SENPAI integration for automatic chant triggering based on game events
+- Added event instruction for SENPAI events (red card, yellow card, sub, own goal)
+- Chants distributed across first half, second half, and free time slots
+- Chant queue system for handling overlapping chant times
+- Configurable chant volume, delay, repeats, and fade settings
+- Added riglevel CLI tool for audio normalization
+- Thread-safe game state management
+- Fixed fadeout volume to scale with player's max volume instead of absolute values
+
+26/10/17 - Version v1.8
+- Added automatic anthem handling: pressing home anthem button now automatically stops or fades away
+  anthem (configurable in rigdio.yml)
+- Added restart button (⟲) to reset last played song
+- Added TimeCondition: prompts for goal minute and plays based on time comparison (raw .4ccm only)
+- Updated for Autumn 2017 ruleset
+- Separated playback logic from GUI elements (preparation for SENPAI integration)
+- Fixed ConditionPlayer not initialising max volume, causing exception in fade thread
+- Fixed score widget not resetting on file load, and away team ConditionLists thinking they were home
+- Improved error message for users downloading .exe instead of .7z archive
+
+20/08/17 - Version v1.7
+- Significant rigDJ rewrite with improved user interface
+- Added copyable .4ccm preview window to rigDJ, updating in real time
+- Added rename/delete player and delete song buttons in rigDJ
+- Added volume sliders per player (temporary measure before proper balancing)
+- Added "mostgoals" condition: plays for the player with the most goals
+- Added ability to force strings to be treated as a single token in conditions
+- Reworked parser internals for easier addition of new conditions/instructions
+- Moved alternate UI colours to rigdio.yml
+- Improved config detection and error detection for NotConditionEditor
+- Now saves with .4ccm default file extension
+- Removed legacy theme folder (from pyglet days)
+- Fixed bug where condition tokens would carry over to conditions of different types
+- Fixed bug in LeadCondition initialisation
+- Fixed several issues in MetaCondition implementation
+- Fixed validation failure in StartInstructionEditor
+- Fixed rigdj allowing non-integer values for 'every'
+- Fixed played songs sometimes not unloading when new .4ccm is loaded
+- Fixed adding songs sometimes leaving "New Song" instead of the file opened in the dialog
+- Fixed error when using OnceCondition
+- Fixed edit instruction editor bug
+- Changed +/- to arrows in rigDJ menu
+- Clearer wording for some error messages
+
+25/07/17 - Version v1.6
+- Added "every" condition: plays on every nth goal
+- Added "every" modifier to pause instruction: triggers only on the nth pause
+- Added temporary undo semantics (erases the last goal)
+- Added team button colour coding and increased spacing to reduce misclicking
+- Added rigdio.yml config file (currently sets fade duration)
+- Added default ConditionList constructor
+- Fixed player-specific goal counts not resetting on .4ccm reload
+- Fixed race condition when resuming playback of a song which is fading out
+- Fixed bug where all conditions were treated as instructions
+- Fixed away team anthems fading out like goalhorns
+
+21/07/17 - Version v1.5.2
+- Fixed bug where condition tokens would carry over to conditions of different types
+- Fixed bug in LeadCondition initialisation
+- Fixed several issues in MetaCondition implementation
+- Fixed validation failure in StartInstructionEditor
+
+10/07/17 - Version v1.5 & RigDJ v1.5
+- Added support for reordering songs in rigDJ (up/down arrows)
+- Substantial internal refactor making it easier to add new conditions/instructions
+- RigDJ updated to support all current condition/instruction types
+- Added MetaCondition system for complex condition composition
+- Added PlayNextSong exception for instruction-driven song switching
+- Cleaned up rigDJ UI
+- Fixed bug where condition tokens would carry over to conditions of different types
+- Fixed bug in LeadCondition initialisation
+- Fixed issues in MetaCondition implementation and lambda condition editing
+
+09/06/17 - Version v1.4 & RigDJ v1.3
+- First fully functional version of rigDJ (.4ccm GUI editor)
+- rigDJ can load and save .4ccm files without data loss
+- Added condition editing dialog with type selector and descriptions
+- Added "match" condition: plays based on match type (group, knockouts, final)
+- Added "home" condition: plays if team is at home
+- Added "pause" instruction: specify continue or restart on pause
+- Added "once" condition: plays song exactly once then unloads
+- Added "end" instruction: specify loop or stop at song end
+- Added "lead" condition: plays based on goal difference
+- Added "opponent" condition: plays against specific teams
+- Added "comeback" condition: plays when team was behind before scoring
+- Added "first" condition: plays on team's first goal
+- Added "start" instruction: seek to specific time in file
+- Added "not" condition: plays when given condition is false
+- Added auto-filename lookup: if no filename specified, looks for file matching QD's naming style
+- Shared goalhorn buttons now split into multiple lines based on commas
+- Smarter shared goalhorn button text formatting
+- Fixed goals condition not checking correct scorer dict
+- Songs that will never play again are automatically unloaded to save RAM
+- Match type selector added to main window
+
+02/06/17 - Version v1.3
+- Major UI overhaul: switched from pyglet to tkinter
+- Switched audio backend from avbin/pyglet to libVLC
+- Added versioning for use in logs and window title
+- Added application icon
+- Logging now outputs to rigdio.log
+- Cleaned up logger implementation with startLog() function
+- Separate rigDJ log file (rigdj.log)
+- Fixed tkinter frame not showing icon/title
+- Fixed start instruction not working correctly
+- Fixed bugs from UI shift and Condition constructor changes
+
+18/05/17 - Version v1.2
+- Added three-second fadeout to all goalhorns
+- Moved fading to its own thread, preventing the hanging bug
+- Added "start" directive: allows initial seek position in audio files
+- Added "opponent" and "comeback" conditions
+- Added "first" condition: plays on team's first goal
+- Improved logging abilities
+- Fixed away team anthems fading out like goalhorns
+- Resetting game state no longer wipes home/away team names
+- Game state now automatically resets when a new game is loaded
+- Fixed gamestate giving wrong team name when opponent_name was called
+
+31/03/17 - Version v1.1
+- Victory anthems no longer loop
+
+10/09/16 - Version v1.0
+- Initial release
+- Goalhorn and anthem playback with pyglet/avbin backend
+- Condition system: goals, not, comeback, opponent, first
+- .4ccm file format for music exports
+- Shared goalhorn support
+- Game state tracking with score and scorer counts
+- Application icon and license

@@ -11,11 +11,13 @@ class Logger(object):
       self.log.close()
 
    def write(self, message):
-      self.terminal.write(message)
-      self.log.write(message)  
+      if self.terminal is not None:
+         self.terminal.write(message)
+      self.log.write(message)
 
    def flush(self):
-      self.terminal.flush()
+      if self.terminal is not None:
+         self.terminal.flush()
       self.log.flush()
 
 def startLog (filename):

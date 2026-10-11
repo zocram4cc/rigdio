@@ -1,6 +1,7 @@
 from tkinter import *
 import tkinter.font
 import platform
+
 # thanks to https://stackoverflow.com/a/21831742 for this method
 def setMaxWidth(stringList, element):
    """
@@ -112,12 +113,12 @@ class Scrollable (Frame):
 
    def __fill_canvas(self, event):
       "Enlarge the windows item to the canvas width"
-      
+
       canvas_width = event.width
       self.canvas.itemconfig(self.windows_item, width = canvas_width)
 
    def update(self):
       "Update the canvas and the scrollregion"
-      
+
       self.update_idletasks()
       self.canvas.config(scrollregion=self.canvas.bbox(self.windows_item))
