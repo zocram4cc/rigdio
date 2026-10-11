@@ -13,3 +13,4 @@ zstandard==0.23.0
 Flask==3.0.0
 thefuzz==0.20.0
 requests==2.32.3
+setuptools<81

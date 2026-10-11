@@ -1,3 +1,21 @@
+11/10/26 - Version v2.2.1 (zocram4cc fork)
+- Based on upstream v2.2.0
+- Added a local JSON API for rigbot and SEN:P-AI (webserver_enabled, webserver_port 31338,
+  webserver_host in config.yml). It listens on 127.0.0.1 only by default; it has no
+  authentication, so set webserver_host to 0.0.0.0 only on a trusted network
+  /api/load - loads music/<name>/<name>.4ccm for home and away; loading the same pair
+  again keeps the score, a missing export answers 404
+  /api/anthems - plays the away anthem, then the home anthem
+  /api/goal - plays the scorer's goalhorn (fuzzy name match) or the standard one
+  /api/victory - plays the victory anthem
+  /api/chant - plays a random chant, for the given side or a random one
+  /api/event - plays a player's sub, red, yellow or owngoal clip (event instruction)
+  goal, victory and chant take side (home/away) or team (a loaded team's name)
+- Event clips (sub, red/yellow card, own goal) play again when SEN:P-AI 1.3.0 or
+  rigbot sends them; they had no trigger since SENPAI support was removed in v1.11
+- Fixed loudness normalization doing nothing in the packaged build: ffmpeg.exe in
+  _internal was not on the search path
+
 15/08/26 - Version v2.2.0 & RigDJ v1.16.0
 - Added "normalize;no" modifier in .4ccm files
   Managers with a curated, pre-normalized music export can opt out of loudness

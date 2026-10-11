@@ -2,7 +2,8 @@ from condition import *
 from os.path import splitext, dirname, abspath
 import os
 import sys
-os.environ["PATH"] = dirname(abspath(sys.argv[0])) + os.pathsep + os.environ["PATH"]
+# exe folder, plus PyInstaller's _internal (ffmpeg.exe and libmpv-2.dll ship there)
+os.environ["PATH"] = os.pathsep.join(p for p in (dirname(abspath(sys.argv[0])), getattr(sys, "_MEIPASS", None), os.environ["PATH"]) if p)
 import mpv
 import random
 import time
