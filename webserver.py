@@ -4,9 +4,12 @@ import time
 import requests
 import logging
 import json
+import os
+import random
 from thefuzz import fuzz
 from songgui import PlayerButtons
 from chantswindow import ChantsButton
+from event import EventManager
 
 bot_api_url = "http://localhost:31335/api/mute"
 
@@ -67,6 +70,14 @@ def start_webserver(rigdio_instance, port):
             return # interrupted
         rigdio_instance.home.anthemButton.clists.pauseSong()
 
+    def team_menu_for(data):
+        """The loaded team a request names: 'side' (home/away) wins over 'team' (a team name)."""
+        side = (data.get('side') or '').lower()
+        if side in ('home', 'away'):
+            return getattr(rigdio_instance, side)
+        home_name = rigdio_instance.game.home_name or ''
+        return rigdio_instance.home if data.get('team', '').lower() == home_name.lower() else rigdio_instance.away
+
     @app.route('/api/load', methods=['POST'])
     def load_teams():
         data = request.get_json()
@@ -80,12 +91,17 @@ def start_webserver(rigdio_instance, port):
         home_file = f"music/{home_team}/{home_team}.4ccm"
         away_file = f"music/{away_team}/{away_team}.4ccm"
 
+        # same teams again (e.g. a reconnect) must not reset the score
+        if rigdio_instance.home and rigdio_instance.away and \
+           (rigdio_instance.game.home_name, rigdio_instance.game.away_name) == (home_team.lower(), away_team.lower()):
+            return jsonify({"status": "success", "message": "Teams already loaded."})
+        missing = [f for f in (home_file, away_file) if not os.path.isfile(f)]
+        if missing:
+            return jsonify({"error": f"No export at {', '.join(missing)}."}), 404
+
         try:
             rigdio_instance.legacyLoad(home_file, home=True)
             rigdio_instance.legacyLoad(away_file, home=False)
-            rigdio_instance.scoreWidget.updateLabels()
-            rigdio_instance.game.clear()
-            rigdio_instance.scoreWidget.updateScore()
             return jsonify({"status": "success", "message": f"Loaded teams: {home_team} (home) and {away_team} (away)"})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -95,11 +111,13 @@ def start_webserver(rigdio_instance, port):
         if not playback_lock.acquire(blocking=False):
             return jsonify({"error": "A sound is already playing."}), 409
 
-        data = request.get_json()
-        team = data.get('team') if data else None
-        duration = data.get('duration', 15) if data else 15
-
-        button = rigdio_instance.randomHome if team == rigdio_instance.game.home_name else rigdio_instance.randomAway
+        data = request.get_json(silent=True) or {}
+        team = data.get('team')
+        duration = data.get('duration', 15)
+        side = (data.get('side') or '').lower()
+        if side not in ('home', 'away'):
+            side = ('home' if team == rigdio_instance.game.home_name else 'away') if team else random.choice(['home', 'away'])
+        button = rigdio_instance.randomHome if side == 'home' else rigdio_instance.randomAway
         
         def target_with_lock(button, duration):
             try:
@@ -110,19 +128,18 @@ def start_webserver(rigdio_instance, port):
         thread = threading.Thread(target=target_with_lock, args=(button, duration))
         thread.start()
 
-        return jsonify({"status": "success", "message": f"Playing chant for {team or 'random team'}"})
+        return jsonify({"status": "success", "message": f"Playing chant for {side}"})
 
     @app.route('/api/goal', methods=['POST'])
     def goal():
-        data = request.get_json()
-        team = data.get('team')
+        data = request.get_json(silent=True) or {}
+        team = data.get('team') or data.get('side')
         scorer = data.get('scorer')
-        duration = data.get('duration', 45) if data else 45
+        duration = data.get('duration', 45)
 
         if not team:
-            return jsonify({"error": "'team' is a required field."}), 400
-#        team_stripped = team[1:-1]
-        team_menu = rigdio_instance.home if team.lower() == rigdio_instance.game.home_name.lower() else rigdio_instance.away
+            return jsonify({"error": "'team' or 'side' is required."}), 400
+        team_menu = team_menu_for(data)
         if not team_menu:
             return jsonify({"error": f"Team '{team}' not loaded."}), 404
 
@@ -167,14 +184,14 @@ def start_webserver(rigdio_instance, port):
 
     @app.route('/api/victory', methods=['POST'])
     def victory():
-        data = request.get_json()
-        team = data.get('team')
-        duration = data.get('duration', 90) if data else 90
+        data = request.get_json(silent=True) or {}
+        team = data.get('team') or data.get('side')
+        duration = data.get('duration', 90)
 
         if not team:
-            return jsonify({"error": "'team' is a required field."}), 400
+            return jsonify({"error": "'team' or 'side' is required."}), 400
 
-        team_menu = rigdio_instance.home if team.lower() == rigdio_instance.game.home_name.lower() else rigdio_instance.away
+        team_menu = team_menu_for(data)
         if not team_menu:
             return jsonify({"error": f"Team '{team}' not loaded."}), 404
 
@@ -190,6 +207,18 @@ def start_webserver(rigdio_instance, port):
         thread = threading.Thread(target=target_with_lock, args=(team_menu.victoryButton, duration))
         thread.start()
         return jsonify({"status": "success", "message": f"Playing victory anthem for {team}."})
+
+    @app.route('/api/event', methods=['POST'])
+    def match_event():
+        """A player's sub/card/own-goal clip (.4ccm 'event' instruction)."""
+        data = request.get_json(silent=True) or {}
+        etype, player = data.get('event'), data.get('player')
+        if etype not in EventManager.types or not player:
+            return jsonify({"error": f"'event' must be one of {EventManager.types}; 'player' is required."}), 400
+        # either team may own the clip, as with the old SENPAI listener
+        for manager in (rigdio_instance.events.home, rigdio_instance.events.away):
+            manager.checkAndPlay(player.upper(), etype, int(data.get('minute', 0)))
+        return jsonify({"status": "success", "message": f"{etype} for {player}."})
 
     @app.route('/api/anthems', methods=['POST'])
     def anthems():
